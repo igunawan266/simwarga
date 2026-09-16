@@ -1,0 +1,176 @@
+# Deployment Configuration for SIMWarga
+# Use with Capistrano or similar deployment tools
+
+version: 1.0
+
+# Deployment servers
+servers:
+  production:
+    host: your.production.server
+    user: deploy
+    port: 22
+    path: /var/www/simwarga
+
+  staging:
+    host: your.staging.server
+    user: deploy
+    port: 22
+    path: /var/www/simwarga-staging
+
+# Repository configuration
+repository:
+  url: https://github.com/igunawan266/simwarga.git
+  branch: main
+
+# Pre-deployment checks
+pre_deploy:
+  - check_php_version: "8.2"
+  - check_disk_space: "5GB"
+  - verify_dependencies: true
+  - verify_database_backup: true
+
+# Deployment steps
+deployment:
+  # 1. Clone/pull repository
+  - name: fetch_code
+    command: git pull origin {{ branch }}
+
+  # 2. Install dependencies
+  - name: install_dependencies
+    command: composer install --no-dev --optimize-autoloader
+
+  # 3. Environment setup
+  - name: setup_env
+    command: cp .env.example .env
+
+  # 4. Generate app key
+  - name: generate_key
+    command: php artisan key:generate
+
+  # 5. Database migrations
+  - name: run_migrations
+    command: php artisan migrate --force
+
+  # 6. Cache operations
+  - name: clear_cache
+    command: php artisan cache:clear
+
+  - name: cache_config
+    command: php artisan config:cache
+
+  - name: cache_routes
+    command: php artisan route:cache
+
+# Post-deployment actions
+post_deploy:
+  - name: restart_services
+    command: systemctl restart php-fpm nginx
+
+  - name: verify_health
+    command: curl -f http://localhost/health || exit 1
+
+  - name: notify_team
+    command: echo "Deployment completed" | mail -s "SIMWarga Deployed" team@example.com
+
+# Rollback configuration
+rollback:
+  enabled: true
+  keep_releases: 5
+
+  steps:
+    - name: revert_code
+      command: git checkout HEAD~1
+
+    - name: revert_migrations
+      command: php artisan migrate:rollback
+
+    - name: clear_cache
+      command: php artisan cache:clear
+
+# Health checks
+health_checks:
+  - name: database
+    command: php artisan tinker < "DB::connection()->getPdo();"
+
+  - name: http
+    url: https://yourdomain.com/health
+    expected_status: 200
+
+  - name: queue
+    command: php artisan queue:work --once
+
+# Backups
+backups:
+  enabled: true
+  before_deploy: true
+
+  database:
+    command: "pg_dump -U {{ db_user }} {{ db_name }} > {{ backup_path }}/db_$(date +%Y%m%d_%H%M%S).sql"
+    retention_days: 30
+
+  files:
+    directories:
+      - storage/app
+      - storage/uploads
+    retention_days: 7
+
+# Logging
+logging:
+  deployment_log: logs/deployment.log
+  error_log: logs/deployment-error.log
+
+  # Send logs to external service
+  external_logging:
+    enabled: false
+    service: sentry
+    dsn: "{{ SENTRY_DSN }}"
+
+# Monitoring
+monitoring:
+  enabled: true
+
+  # Performance monitoring
+  performance:
+    check_response_time: true
+    threshold_ms: 500
+
+  # Error monitoring
+  errors:
+    check_error_log: true
+    alert_threshold: 5
+
+  # Database monitoring
+  database:
+    check_query_performance: true
+    slow_query_threshold_ms: 1000
+
+# Notifications
+notifications:
+  slack:
+    enabled: true
+    webhook_url: "{{ SLACK_WEBHOOK_URL }}"
+    channels:
+      - deployment
+      - alerts
+
+  email:
+    enabled: true
+    recipients:
+      - admin@example.com
+      - devops@example.com
+
+# Environment-specific variables
+environments:
+  production:
+    app_env: production
+    app_debug: false
+    log_channel: stack
+    queue_connection: redis
+    cache_driver: redis
+
+  staging:
+    app_env: staging
+    app_debug: true
+    log_channel: single
+    queue_connection: database
+    cache_driver: file

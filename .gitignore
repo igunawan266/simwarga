@@ -1,0 +1,66 @@
+# Laravel
+/node_modules
+/public/hot
+/public/storage
+/storage/*.key
+/bootstrap/cache
+.env
+.env.backup
+.env.production.backup
+.phpunit.result.cache
+Homestead.json
+Homestead.yaml
+auth.json
+.rnd
+.DS_Store
+
+# IDE
+/.vscode
+/.idea
+/.history
+*.code-workspace
+.sublime-project
+.sublime-workspace
+*.swp
+*.swo
+*~
+.netrc
+
+# OS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Logs
+storage/logs
+*.log
+npm-debug.log
+yarn-error.log
+
+# Lock files (uncomment if you want to commit them)
+# /composer.lock
+# /package-lock.json
+
+# Temporary files
+*.tmp
+*.temp
+*.bak
+.cache
+*.cache
+
+# Docker
+.docker/volumes
+docker/volumes
+
+# Testing
+.coverage
+coverage
+build
+
+# Backup
+*.backup
+*.bkp
