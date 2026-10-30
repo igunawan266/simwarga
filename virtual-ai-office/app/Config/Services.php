@@ -55,4 +55,13 @@ class Services extends BaseService
 
         return new \App\Libraries\Auth\CurrentUser();
     }
+
+    public static function tripay(bool $getShared = true): \App\Libraries\Payment\Tripay\TripayClient
+    {
+        if ($getShared) {
+            return static::getSharedInstance('tripay');
+        }
+
+        return new \App\Libraries\Payment\Tripay\TripayClient(config('Tripay'));
+    }
 }

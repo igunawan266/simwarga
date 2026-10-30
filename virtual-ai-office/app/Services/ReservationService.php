@@ -36,7 +36,8 @@ class ReservationService
                 ->where('tenant_id', $tenantId)->where('office_id', $office['id'])->where('status', 'pending')->get()->getResultArray(), 'id');
             if ($subIds !== []) {
                 $db->table('tenant_subscriptions')->whereIn('id', $subIds)
-                    ->update(['status' => 'cancelled', 'cancelled_at' => $now, 'office_id' => null, 'updated_at' => $now]);
+                    // office_id is kept as "the office this subscription was for", so a late payment can re-claim it.
+                    ->update(['status' => 'cancelled', 'cancelled_at' => $now, 'updated_at' => $now]);
                 $db->table('invoices')->whereIn('subscription_id', $subIds)->where('status', 'unpaid')
                     ->update(['status' => 'expired', 'updated_at' => $now]);
             }

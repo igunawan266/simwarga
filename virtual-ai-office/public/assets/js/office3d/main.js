@@ -5,7 +5,7 @@ import { api, ApiError } from './core/api.js';
 import { DIM, floorY, floorHeight } from './core/config.js';
 import { Building } from './building/Building.js';
 import { Elevator } from './building/Elevator.js';
-import { Hud, esc, adminFloorHtml, plansPanelHtml, teamPanelHtml, registerPanelHtml, billingPanelHtml } from './ui/Hud.js';
+import { Hud, esc, adminFloorHtml, plansPanelHtml, teamPanelHtml, registerPanelHtml, billingPanelHtml, channelsPanelHtml, paymentPanelHtml } from './ui/Hud.js';
 
 /**
  * Application controller / state machine.
@@ -56,6 +56,10 @@ class App {
             rent: (d) => this.openRegister(Number(d.floor)),
             'form:register': (v, f) => this.submitRegister(v, f),
             billing: () => this.openBilling(),
+            'pay-invoice': (d) => this.openChannels(Number(d.invoice)),
+            'pay-with': (d, el) => this.payWith(Number(d.invoice), d.method, el),
+            'check-payment': (d) => this.checkPayment(Number(d.invoice), true),
+            'admin-sync-channels': (d, el) => this.adminSyncChannels(el),
             // Team & access
             team: () => this.openTeam(),
             copy: (d) => navigator.clipboard?.writeText(d.text).then(() => this.hud.toast('Tautan disalin.'), () => this.hud.toast('Salin manual tautan di atas.', 'error')),
@@ -108,6 +112,13 @@ class App {
         this.hud.breadcrumb([directory.building.name, 'Explore Building']);
         await this.camera.flyTo([95, 62, 120], [0, 26, 0], { duration: 3.2, ease: 'power2.out', limits: { min: 45, max: 320 } });
 
+        // Back from Tripay's checkout page: nothing is activated by this redirect, we just show the status.
+        if (new URLSearchParams(location.search).get('payment') === 'return' && this.session?.tenant) {
+            history.replaceState(null, '', location.pathname);
+            this.hud.toast('Menunggu konfirmasi pembayaran dari Tripay…');
+            this.openBilling();
+        }
+
         // Just accepted an invitation: welcome the new member and take them up to their office.
         if (new URLSearchParams(location.search).has('welcome') && this.session?.tenant?.office) {
             history.replaceState(null, '', location.pathname);
@@ -140,8 +151,8 @@ class App {
         if (this.mode === 'office' || this.mode === 'room') await this.explore();
         this.hud.showPanel('<div class="eyebrow">Memuat paket…</div>');
         try {
-            const { plans } = await api.admin.plans();
-            this.hud.showPanel(plansPanelHtml(plans));
+            const [{ plans }, gateway] = await Promise.all([api.admin.plans(), api.admin.paymentChannels()]);
+            this.hud.showPanel(plansPanelHtml(plans, gateway));
             document.getElementById('info-panel').classList.add('info-panel--wide');
         } catch (e) {
             this.hud.toast(e.message, 'error');
@@ -268,7 +279,80 @@ class App {
         this.openBilling();
     }
 
+    async adminSyncChannels(el) {
+        el.disabled = true;
+        try {
+            const { synced } = await api.admin.syncChannels();
+            this.hud.toast(`${synced} kanal pembayaran disinkronkan dari Tripay.`);
+            this.adminPlans();
+        } catch (e) {
+            this.hud.toast(e.message, 'error', 6000);
+            el.disabled = false;
+        }
+    }
+
+    async openChannels(invoiceId) {
+        this.stopPaymentPolling();
+        try {
+            this.hud.showPanel(channelsPanelHtml(await api.payments.channels(invoiceId)));
+        } catch (e) {
+            this.hud.toast(e.message, 'error', 6000);
+        }
+    }
+
+    async payWith(invoiceId, method, el) {
+        el.disabled = true;
+        try {
+            const { payment } = await api.payments.pay(invoiceId, method);
+            this.hud.showPanel(paymentPanelHtml(payment, invoiceId));
+            this.startPaymentPolling(invoiceId);
+        } catch (e) {
+            this.hud.toast(e.message, 'error', 6000);
+            el.disabled = false;
+        }
+    }
+
+    /** Poll every 10 s (max 30 min) while the instructions are open; the callback is what activates. */
+    startPaymentPolling(invoiceId) {
+        this.stopPaymentPolling();
+        const started = Date.now();
+        this.payPoll = setInterval(() => {
+            if (!document.getElementById('pay-status') || Date.now() - started > 30 * 60 * 1000) return this.stopPaymentPolling();
+            if (!document.hidden) this.checkPayment(invoiceId, false);
+        }, 10000);
+    }
+
+    stopPaymentPolling() {
+        clearInterval(this.payPoll);
+        this.payPoll = null;
+    }
+
+    async checkPayment(invoiceId, manual) {
+        let status;
+        try {
+            status = await api.payments.status(invoiceId);
+        } catch (e) {
+            if (manual) this.hud.toast(e.message, 'error');
+            return;
+        }
+        const latest = status.payments[0];
+        const el = document.getElementById('pay-status');
+        if (el && latest) el.textContent = latest.status;
+        if (status.invoice_status === 'paid') {
+            this.stopPaymentPolling();
+            this.session = await api.session();
+            this.hud.renderSession(this.session);
+            await this.refreshBuilding();
+            this.hud.toast('Pembayaran terkonfirmasi. Langganan aktif — selamat datang di kantor Anda!');
+            this.closePanel();
+            this.enterOffice();
+        } else if (manual) {
+            this.hud.toast(latest?.status === 'EXPIRED' ? 'Transaksi kedaluwarsa. Pilih "Ganti metode" untuk membuat yang baru.' : 'Belum ada konfirmasi pembayaran dari Tripay.');
+        }
+    }
+
     async openBilling() {
+        this.stopPaymentPolling();
         try {
             const billing = await api.billing();
             this.hud.showPanel(billingPanelHtml(billing));

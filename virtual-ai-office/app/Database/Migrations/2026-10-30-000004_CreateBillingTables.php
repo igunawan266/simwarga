@@ -98,7 +98,7 @@ class CreateBillingTables extends BaseMigration
             'id'               => $this->id(),
             'provider'         => $this->str(30, false, 'tripay'),
             'event'            => $this->str(50, true),  // X-Callback-Event
-            'event_hash'       => $this->str(64),        // sha256(reference|status|raw body)
+            'event_hash'       => $this->str(64),        // sha256(signature + raw body): Tripay retransmissions collapse
             'merchant_ref'     => $this->str(64, true),
             'provider_reference' => $this->str(64, true),
             'payment_id'       => $this->fk(true),

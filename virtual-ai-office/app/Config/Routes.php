@@ -21,7 +21,12 @@ $routes->group('api/v1', ['namespace' => 'App\Controllers\Api\V1', 'filter' => '
         $routes->get('/', 'OfficeController::show');
         $routes->get('rooms/(:num)', 'OfficeController::room/$1');
 
-        $routes->get('billing', 'OfficeController::billing', ['filter' => 'role:tenant_owner,tenant_admin']);
+        $routes->group('', ['filter' => 'role:tenant_owner,tenant_admin'], static function (RouteCollection $routes) {
+            $routes->get('billing', 'OfficeController::billing');
+            $routes->get('invoices/(:num)/channels', 'PaymentController::channels/$1');
+            $routes->post('invoices/(:num)/pay', 'PaymentController::pay/$1');
+            $routes->get('invoices/(:num)/payments', 'PaymentController::status/$1');
+        });
         $routes->get('members', 'MembersController::index');
         $routes->group('members', ['filter' => 'role:tenant_owner,tenant_admin'], static function (RouteCollection $routes) {
             $routes->post('/', 'MembersController::invite');
@@ -47,11 +52,14 @@ $routes->group('api/v1', ['namespace' => 'App\Controllers\Api\V1', 'filter' => '
         $routes->delete('tenants/(:num)/members/(:num)', 'TenantMembersController::removeFor/$1/$2');
         $routes->post('tenants/(:num)/members/(:num)/reinvite', 'TenantMembersController::reinviteFor/$1/$2');
 
+        $routes->get('payment-channels', 'PaymentChannelsController::index');
+        $routes->post('payment-channels/sync', 'PaymentChannelsController::sync');
+
         $routes->get('plans', 'PlansController::index');
         $routes->post('plans', 'PlansController::create');
         $routes->patch('plans/(:num)', 'PlansController::update/$1');
     });
 });
 
-// Reserved for Phase 4 (Tripay callback). CSRF is skipped for webhooks/*; the signature check replaces it.
-// $routes->post('webhooks/tripay', 'Webhooks\TripayController::handle');
+// Payment gateway callback. CSRF is skipped for webhooks/*; the HMAC signature check replaces it.
+$routes->post('webhooks/tripay', 'Webhooks\TripayController::handle', ['filter' => 'throttle:webhook,240,60']);

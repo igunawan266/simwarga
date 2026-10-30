@@ -42,6 +42,11 @@ export const api = {
     plans: () => request('GET', 'plans'),
     register: (data) => request('POST', 'register', data),
     billing: () => request('GET', 'office/billing'),
+    payments: {
+        channels: (invoiceId) => request('GET', `office/invoices/${Number(invoiceId)}/channels`),
+        pay: (invoiceId, method) => request('POST', `office/invoices/${Number(invoiceId)}/pay`, { method }),
+        status: (invoiceId) => request('GET', `office/invoices/${Number(invoiceId)}/payments`),
+    },
     members: {
         list: () => request('GET', 'office/members'),
         invite: (data) => request('POST', 'office/members', data),
@@ -63,6 +68,8 @@ export const api = {
         assignOffice: (id, tenantId) => request('POST', `admin/offices/${Number(id)}/assign`, { tenant_id: tenantId }),
         releaseOffice: (id) => request('POST', `admin/offices/${Number(id)}/release`),
         plans: () => request('GET', 'admin/plans'),
+        paymentChannels: () => request('GET', 'admin/payment-channels'),
+        syncChannels: () => request('POST', 'admin/payment-channels/sync'),
         updatePlan: (id, data) => request('PATCH', `admin/plans/${Number(id)}`, data),
     },
 };

@@ -135,7 +135,12 @@ worker CLI (`php spark agents:work`) mengambil task `queued` dari Redis/DB, mema
 tool calling, menulis `agent_logs` + `agent_conversations`, menambah token usage dan menegakkan
 `token_limit_monthly` serta kuota paket. Status agent di 3D di-polling/SSE.
 
-**Payment Tripay (Phase 4)** — `invoices` → `payments` (satu baris per upaya bayar, `merchant_ref` unik).
+**Payment Tripay (Phase 4.1, sudah dibangun)** — `app/Libraries/Payment/Tripay/` (klien + transport HTTP
+yang bisa di-mock), `app/Services/Payment/` (`ChannelService`, `PaymentService`, `CallbackService`,
+`SubscriptionActivator`), `Controllers/Webhooks/TripayController`. Endpoint & signature mengikuti
+library PHP resmi Tripay (`trijayadigital/tripay-php`); dokumentasi web Tripay tidak dapat diakses
+dari lingkungan pengembangan ini, jadi cocokkan ulang dengan https://tripay.co.id/developer sebelum go-live.
+Rancangan awal: `invoices` → `payments` (satu baris per upaya bayar, `merchant_ref` unik).
 Callback: simpan mentah di `payment_callbacks` → validasi signature HMAC-SHA256 dengan Private Key
 sesuai dokumentasi resmi Tripay → cocokkan `merchant_ref`, nominal, status → dalam **satu transaksi DB**
 dengan `SELECT … FOR UPDATE` pada payment: tandai `PAID`, invoice `paid`, aktifkan/perpanjang

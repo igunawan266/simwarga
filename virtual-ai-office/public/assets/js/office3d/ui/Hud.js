@@ -359,11 +359,22 @@ export function adminFloorHtml(row, tenants, detail, inviteUrl = null) {
         ${officeForm}`;
 }
 
-export function plansPanelHtml(plans) {
+export function plansPanelHtml(plans, gateway = null) {
     const num = (name, value, label, step = 1) => `<label>${label}<input name="${name}" type="number" min="0" step="${step}" value="${value}"></label>`;
+    const gw = !gateway ? '' : `
+        <div class="section-label">Payment gateway · Tripay</div>
+        <dl class="kv">
+            <dt>Status</dt><dd>${gateway.gateway.configured ? `Terkonfigurasi · ${esc(gateway.gateway.mode)}` : 'Belum dikonfigurasi (.env)'}</dd>
+            <dt>Kanal aktif</dt><dd>${gateway.channels.filter((c) => Number(c.is_active)).length} / ${gateway.channels.length}</dd>
+        </dl>
+        <small class="muted">Callback URL untuk dashboard Tripay:</small>
+        <div class="invite-link"><code>${esc(gateway.gateway.callback_url)}</code></div>
+        <button class="btn" data-action="admin-sync-channels" ${gateway.gateway.configured ? '' : 'disabled'}>Sinkronkan kanal pembayaran</button>`;
     return `
         <div class="eyebrow">Super Admin</div>
-        <h3>Paket Langganan</h3>
+        <h3>Paket &amp; Pembayaran</h3>
+        ${gw}
+        <div class="section-label">Paket langganan</div>
         <div class="muted">Perubahan berlaku untuk pembelian & perpanjangan baru. Langganan berjalan memakai snapshot harga saat dibeli.</div>
         ${plans.map((p) => `
             <form class="admin-form plan-card" data-form="plan" data-plan="${p.id}">
@@ -529,8 +540,9 @@ export function billingPanelHtml(b) {
                 ${i.line_items.map((l) => `<div class="invoice-line"><span>${esc(l.description)}</span><span>${rupiah(l.amount)}</span></div>`).join('')}
                 <div class="invoice-line invoice-line--total"><span>Total</span><span>${rupiah(i.total)}</span></div>
                 ${i.status === 'unpaid' ? `<small>Jatuh tempo ${esc(i.due_at)}</small>
-                    <button class="btn btn--primary btn--block" disabled title="Phase 4">Bayar via Tripay</button>
-                    <small class="muted">PHASE 4: pembayaran Virtual Account / QRIS / E-Wallet melalui Tripay. Tidak ada pembayaran yang disimulasikan.</small>` : ''}
+                    <button class="btn btn--primary btn--block" data-action="pay-invoice" data-invoice="${i.id}">Bayar via Tripay</button>
+                    <small class="muted">Virtual Account, QRIS, E-Wallet dan kanal lain yang aktif di akun merchant.</small>` : ''}
+                ${i.status === 'paid' ? `<small>Lunas ${esc(i.paid_at ?? '')}</small>` : ''}
             </div>`).join('') || '<div class="empty">Belum ada invoice.</div>'}
         ${!pending && b.tenant_status === 'active' ? '<button class="btn btn--block" data-action="enter-office">Masuk kantor</button>' : ''}`;
 }
@@ -538,4 +550,50 @@ export function billingPanelHtml(b) {
 function invoicePill(status) {
     const c = { unpaid: '#fbbf24', paid: '#34d399', expired: '#64748b', failed: '#f87171', refunded: '#a78bfa', cancelled: '#64748b' }[status] || '#94a3b8';
     return `<span class="status-pill" style="--c:${c}">${esc(status)}</span>`;
+}
+
+// ---------------------------------------------------------------------- Tripay payment
+export function channelsPanelHtml(data) {
+    const groups = {};
+    data.channels.forEach((c) => { (groups[c.group] ||= []).push(c); });
+    return `
+        <div class="eyebrow">Bayar invoice ${esc(data.invoice.number)}</div>
+        <h3>Pilih metode pembayaran</h3>
+        <div class="muted">Tagihan ${rupiah(data.invoice.total)} · bayar sebelum ${esc(data.invoice.due_at)}. Biaya kanal ditampilkan sebagai perkiraan; nominal final dari Tripay.</div>
+        ${data.sandbox ? '<div class="prototype-box"><b>MODE SANDBOX TRIPAY</b>Transaksi uji coba. Tandai lunas melalui simulator di dashboard sandbox Tripay; callback akan mengaktifkan langganan.</div>' : ''}
+        ${Object.entries(groups).map(([g, list]) => `
+            <div class="section-label">${esc(g)}</div>
+            ${list.map((c) => `
+                <button class="channel-btn" data-action="pay-with" data-invoice="${data.invoice.id}" data-method="${esc(c.code)}">
+                    ${c.icon_url ? `<img src="${esc(c.icon_url)}" alt="" loading="lazy">` : '<span class="channel-btn__icon"></span>'}
+                    <span><b>${esc(c.name)}</b><small>Biaya ± ${rupiah(c.fee_estimate)}</small></span>
+                    <span class="channel-btn__total">${rupiah(c.total_estimate)}</span>
+                </button>`).join('')}`).join('') || '<div class="empty">Belum ada kanal pembayaran aktif. Hubungi pengelola platform.</div>'}
+        <button class="btn btn--block" style="margin-top:12px" data-action="billing">← Kembali ke tagihan</button>`;
+}
+
+export function paymentPanelHtml(p, invoiceId) {
+    const steps = (p.instructions || []).map((ins) => `
+        <details class="admin-details"><summary>${esc(ins.title)}</summary>
+            <ol class="pay-steps">${(ins.steps || []).map((s) => `<li>${esc(String(s).replace(/<[^>]*>/g, ''))}</li>`).join('')}</ol>
+        </details>`).join('');
+    return `
+        <div class="eyebrow">Instruksi pembayaran</div>
+        <h3>${esc(p.method_name)}</h3>
+        <dl class="kv">
+            <dt>Total dibayar</dt><dd><b>${rupiah(p.total)}</b></dd>
+            <dt>Biaya kanal</dt><dd>${rupiah(p.fee_customer)}</dd>
+            <dt>Referensi</dt><dd>${esc(p.reference ?? '-')}</dd>
+            <dt>Berlaku sampai</dt><dd>${esc(p.expired_at)}</dd>
+            <dt>Status</dt><dd id="pay-status">${esc(p.status)}</dd>
+        </dl>
+        ${p.pay_code ? `<div class="invite-link"><b>Kode bayar / nomor VA</b><code class="pay-code">${esc(p.pay_code)}</code>
+            <button class="btn" data-action="copy" data-text="${esc(p.pay_code)}">Salin kode</button></div>` : ''}
+        ${p.qr_url ? `<div class="pay-qr"><img src="${esc(p.qr_url)}" alt="QR pembayaran" width="220" height="220"></div>` : ''}
+        ${p.checkout_url ? `<a class="btn btn--primary btn--block" href="${esc(p.checkout_url)}" target="_blank" rel="noopener noreferrer">Buka halaman pembayaran Tripay</a>` : ''}
+        ${steps}
+        ${p.is_sandbox ? '<p class="muted small">Mode sandbox: gunakan simulator pembayaran di dashboard Tripay.</p>' : ''}
+        <p class="muted small">Status diperbarui otomatis setelah Tripay mengonfirmasi pembayaran. Menutup halaman ini tidak membatalkan pembayaran.</p>
+        <button class="btn btn--block" data-action="check-payment" data-invoice="${invoiceId}">Cek status pembayaran</button>
+        <button class="btn btn--block" style="margin-top:8px" data-action="pay-invoice" data-invoice="${invoiceId}">Ganti metode</button>`;
 }

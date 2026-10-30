@@ -41,11 +41,17 @@ Status: ✅ selesai · 🟡 fondasi tersedia · ⬜ belum
 - ⬜ Agent-to-agent conversation, execution history, token usage & limit
 - ⬜ Status agent live di scene 3D (polling/SSE)
 
-## PHASE 4 – Payment (Tripay) ⬜
-- ⬜ Konfigurasi merchant (sandbox/production) dari `.env`
-- ⬜ Sinkron kanal pembayaran, buat invoice & transaksi
-- ⬜ Webhook: signature, verifikasi nominal/ref, idempotensi, transaksi DB, aktivasi langganan
-- ⬜ Invoice PDF, expired/failed, refund tracking, renewal, notifikasi, rekonsiliasi (cron)
+## PHASE 4 – Payment (Tripay) 🟡
+- ✅ **4.1 Pembayaran & aktivasi** — konfigurasi merchant sandbox/production dari `.env`;
+  sinkron kanal (`php spark tripay:sync-channels` / tombol Super Admin); pilih kanal → transaksi
+  *closed payment* (signature `HMAC-SHA256(merchantCode+merchantRef+amount)`), instruksi bayar
+  (VA, QR, checkout); webhook `POST /webhooks/tripay`: log mentah, signature `X-Callback-Signature`,
+  cocokkan `merchant_ref` + `reference` + nominal, verifikasi ulang ke `transaction/detail`,
+  idempoten (update bersyarat + `event_hash`), satu transaksi DB → payment PAID, invoice paid,
+  langganan aktif (+durasi), kantor occupied, tenant active; status EXPIRED/FAILED/REFUND dicatat;
+  pembayaran yang telat setelah reservasi lepas mengklaim ulang kantor bila masih kosong;
+  redirect browser tidak mengaktifkan apa pun
+- ⬜ 4.2 Invoice PDF, renewal & expiry langganan (cron), notifikasi, rekonsiliasi transaksi, alur refund admin
 
 ## PHASE 5 – Admin & Reporting ⬜
 - ⬜ Dashboard Super Admin (+ gedung 3D: klik lantai → tenant → profil/agent/langganan)

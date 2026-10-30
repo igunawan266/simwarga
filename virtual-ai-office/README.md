@@ -40,6 +40,19 @@ Di server production, jadwalkan pelepasan reservasi yang tidak dibayar (setiap 5
 php spark office:expire-reservations
 ```
 
+### Mengaktifkan pembayaran Tripay
+
+1. Isi `tripay.merchantCode`, `tripay.apiKey`, `tripay.privateKey` (dan `tripay.mode`) di `.env`.
+2. Di dashboard Tripay, set **Callback URL** ke `https://domain-anda/webhooks/tripay` (harus bisa diakses publik).
+3. Sinkronkan kanal pembayaran (ulangi harian lewat cron):
+
+```bash
+php spark tripay:sync-channels
+```
+
+4. Mode sandbox: lakukan pembayaran uji, lalu tandai lunas lewat simulator di dashboard sandbox Tripay —
+   callback akan mengaktifkan langganan tenant secara otomatis.
+
 ### Akun demo (dibuat oleh `DemoSeeder`, tidak pernah di production)
 
 | Email | Password | Peran |
@@ -65,7 +78,8 @@ Data demo memakai langganan **trial**; tidak ada invoice atau pembayaran palsu y
 8. Di kantor, tombol **Tim & Akses** → undang anggota, salin tautan, buka di browser lain untuk
    bergabung — anggota baru langsung dibawa elevator ke kantornya.
 9. Tanpa login, klik lantai kosong → **Sewa lantai ini** → pilih paket & isi data → kantor di-reserve,
-   invoice dibuat, panel **Tagihan** terbuka (pembayaran Tripay di Phase 4).
+   invoice dibuat, panel **Tagihan** terbuka → **Bayar via Tripay** → pilih kanal → instruksi bayar.
+   Setelah callback PAID terverifikasi, elevator otomatis membawa Anda ke kantor.
 
 Tombol fitur fase berikutnya ditampilkan non-aktif dengan label **PHASE n / PROTOTYPE**.
 
@@ -98,6 +112,11 @@ update `tenant_id`, delete lintas tenant).
 | GET | `/api/v1/plans` | publik — paket aktif |
 | POST | `/api/v1/register` | publik/login, CSRF, 5 per 10 menit — daftar tenant + reserve lantai + invoice |
 | GET | `/api/v1/office/billing` | owner/admin — langganan, reservasi, invoice |
+| GET | `/api/v1/office/invoices/{id}/channels` | owner/admin — kanal + perkiraan biaya |
+| POST | `/api/v1/office/invoices/{id}/pay` | owner/admin — buat transaksi Tripay (`method`) |
+| GET | `/api/v1/office/invoices/{id}/payments` | owner/admin — status pembayaran (polling) |
+| POST | `/webhooks/tripay` | Tripay — callback ber-signature HMAC (tanpa CSRF/session) |
+| GET / POST | `/api/v1/admin/payment-channels[/sync]` | super_admin — status gateway, sinkron kanal |
 | GET | `/api/v1/office/members` | auth + tenant — daftar anggota |
 | POST | `/api/v1/office/members` | owner/admin — undang (`email`, `role`) → `invite_url` |
 | PATCH / DELETE | `/api/v1/office/members/{id}` | owner/admin — ubah peran/status, hapus |

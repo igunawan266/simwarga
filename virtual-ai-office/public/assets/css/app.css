@@ -313,3 +313,16 @@ button { font: inherit; color: inherit; }
 .invoice-line { display: flex; justify-content: space-between; gap: 10px; color: var(--silver); }
 .invoice-line--total { border-top: 1px solid var(--line); padding-top: 6px; color: var(--white); font-weight: 600; }
 .dot-warn { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: #fbbf24; margin-left: 4px; box-shadow: 0 0 6px #fbbf24; vertical-align: middle; }
+
+/* ---------- Tripay payment ---------- */
+.channel-btn { display: grid; grid-template-columns: 40px 1fr auto; gap: 10px; align-items: center; width: 100%; padding: 10px 12px; margin-bottom: 6px; border-radius: 12px; border: 1px solid var(--line); background: rgba(255,255,255,.035); cursor: pointer; text-align: left; transition: border-color .2s, background .2s; }
+.channel-btn:hover { border-color: var(--cyan); background: var(--cyan-soft); }
+.channel-btn[disabled] { opacity: .5; cursor: progress; }
+.channel-btn img, .channel-btn__icon { width: 40px; height: 24px; object-fit: contain; background: #fff; border-radius: 4px; }
+.channel-btn b { display: block; font-size: 13px; }
+.channel-btn small { color: var(--muted); font-size: 11px; }
+.channel-btn__total { font-weight: 600; font-size: 13px; color: var(--cyan); }
+.pay-code { font: 600 18px/1.3 var(--display) !important; letter-spacing: .06em; }
+.pay-qr { display: grid; place-items: center; padding: 12px; background: #fff; border-radius: 12px; margin: 10px 0; }
+.pay-steps { margin: 6px 0 10px; padding-left: 18px; font-size: 12px; color: var(--silver); display: grid; gap: 4px; }
+a.btn { display: block; text-align: center; text-decoration: none; margin: 8px 0; }
