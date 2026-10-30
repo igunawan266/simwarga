@@ -15,11 +15,18 @@ export class Hud {
             const fn = this.actions[el.dataset.action];
             if (fn) {
                 e.preventDefault();
-                fn(el.dataset);
+                fn(el.dataset, el);
             }
         });
         document.addEventListener('keydown', (e) => {
             if (e.key === 'Escape') this.actions.escape?.();
+        });
+        // Generic forms: <form data-form="name"> -> actions['form:name'](values, form)
+        document.addEventListener('submit', (e) => {
+            const form = e.target.closest('form[data-form]');
+            if (!form) return;
+            e.preventDefault();
+            this.actions[`form:${form.dataset.form}`]?.(Object.fromEntries(new FormData(form)), form);
         });
         $('#login-form').addEventListener('submit', (e) => {
             e.preventDefault();
@@ -64,7 +71,8 @@ export class Hud {
         }
         const t = session.tenant;
         const sub = session.user.is_super_admin ? 'Super Admin' : t ? `${t.name} · ${t.role.replace('tenant_', '')}` : 'Tanpa kantor tenant';
-        el.innerHTML = `<div class="user-chip"><span class="avatar">${initials(session.user.name)}</span>
+        const admin = session.user.is_super_admin ? '<button class="btn" data-action="admin-plans">Kelola Paket</button>' : '';
+        el.innerHTML = `${admin}<div class="user-chip"><span class="avatar">${initials(session.user.name)}</span>
             <div>${esc(session.user.name)}<small>${esc(sub)}</small></div></div>
             <button class="btn" data-action="logout">Logout</button>`;
     }
@@ -113,6 +121,7 @@ export class Hud {
 
     // ---------------------------------------------------------------- panels
     showPanel(html) {
+        $('#info-panel').classList.remove('info-panel--wide');
         $('#info-content').innerHTML = html;
         $('#info-panel').hidden = false;
         $('#info-panel').scrollTop = 0;
@@ -135,10 +144,11 @@ export class Hud {
             <dl class="kv">
                 <dt>Nomor kantor</dt><dd>${esc(f.office?.number ?? '—')}</dd>
                 <dt>Status</dt><dd>${esc(t ? 'Occupied' : 'Available')}</dd>
-                ${t ? `<dt>Aktivitas</dt><dd>${'▮'.repeat(t.activity_level)}${'▯'.repeat(3 - t.activity_level)}</dd>` : ''}
+                ${t ? `<dt>Aktivitas</dt><dd>${'●'.repeat(t.activity_level)}${'○'.repeat(3 - t.activity_level)}</dd>` : ''}
             </dl>
             ${action}
-            ${!t ? `<div class="prototype-box"><b>PROTOTYPE · PHASE 2/4</b>Pemesanan lantai & pembayaran Tripay akan aktif pada Phase 4. Data lantai ini sudah tersimpan di tabel <code>floors</code> / <code>offices</code>.</div>` : ''}
+            ${!t && !loggedIn ? `<div class="prototype-box"><b>PHASE 4</b>Pemesanan lantai mandiri & pembayaran Tripay akan aktif pada Phase 4.</div>` : ''}
+            <div id="admin-floor"></div>
         `);
     }
 
@@ -268,3 +278,95 @@ export class Hud {
 }
 
 export { esc };
+
+// ---------------------------------------------------------------------- Super Admin views
+const rupiah = (n) => `Rp ${Number(n || 0).toLocaleString('id-ID')}`;
+
+/** Admin section rendered inside the floor panel. */
+export function adminFloorHtml(row, tenants, detail) {
+    const o = row.office;
+    if (!o) return '';
+    const officeForm = `
+        <form class="admin-form" data-form="office" data-office="${o.id}">
+            <label>Harga sewa / bulan (Rp)<input name="monthly_price" type="number" min="0" step="1000" value="${o.monthly_price}"></label>
+            ${row.tenant ? '' : `<label>Status kantor<select name="status">
+                <option value="available" ${o.status === 'available' ? 'selected' : ''}>Available</option>
+                <option value="maintenance" ${o.status === 'maintenance' ? 'selected' : ''}>Maintenance</option></select></label>`}
+            <button class="btn" type="submit">Simpan kantor</button>
+        </form>`;
+
+    if (row.tenant && detail) {
+        const s = detail.subscription;
+        const enabled = detail.rooms.filter((r) => r.enabled).length;
+        return `
+            <div class="section-label">Super Admin · Tenant</div>
+            <dl class="kv">
+                <dt>Status tenant</dt><dd>${esc(detail.tenant.status)}</dd>
+                <dt>Paket</dt><dd>${s ? `${esc(s.plan_name)} · ${esc(s.status)}` : 'Belum berlangganan'}</dd>
+                ${s?.ends_at ? `<dt>Berakhir</dt><dd>${esc(s.ends_at)}</dd>` : ''}
+                <dt>Ruangan aktif</dt><dd>${enabled} / ${detail.rooms.length}</dd>
+                <dt>Agent AI</dt><dd>${detail.agents.length}</dd>
+                <dt>Anggota</dt><dd>${detail.members.length}</dd>
+                <dt>Sewa</dt><dd>${rupiah(o.monthly_price)}</dd>
+            </dl>
+            ${detail.members.map((m) => `<div class="agent-card"><span class="bot">${initials(m.name)}</span><div><b>${esc(m.name)}</b><small>${esc(m.email)}</small></div><span class="status-pill" style="--c:#94a3b8">${esc(m.role.replace('tenant_', ''))}</span></div>`).join('')}
+            <form class="admin-form" data-form="tenant-status" data-tenant="${detail.tenant.id}">
+                <label>Ubah status tenant<select name="status">
+                    ${['pending', 'active', 'suspended', 'expired'].map((st) => `<option value="${st}" ${detail.tenant.status === st ? 'selected' : ''}>${st}</option>`).join('')}
+                </select></label>
+                <button class="btn" type="submit">Simpan status</button>
+            </form>
+            ${officeForm}
+            <button class="btn btn--danger btn--block" data-action="admin-release" data-office="${o.id}">Kosongkan kantor ${esc(o.number)}</button>
+            <p class="muted small">Ruangan tenant di kantor ini akan dihapus; Agent AI tetap ada tanpa ruangan.</p>`;
+    }
+
+    const free = tenants.filter((t) => !t.office && t.status !== 'suspended');
+    return `
+        <div class="section-label">Super Admin · Sewakan kantor ${esc(o.number)}</div>
+        ${o.status === 'maintenance' ? '<div class="empty">Kantor dalam maintenance. Ubah status ke Available untuk menyewakan.</div>' : `
+        <form class="admin-form" data-form="assign" data-office="${o.id}">
+            <label>Tenant tanpa kantor<select name="tenant_id" required>
+                <option value="">— pilih tenant —</option>
+                ${free.map((t) => `<option value="${t.id}">${esc(t.name)} (${esc(t.status)})</option>`).join('')}
+            </select></label>
+            <button class="btn btn--primary btn--block" type="submit" ${free.length ? '' : 'disabled'}>Sewakan ke tenant</button>
+        </form>
+        <details class="admin-details"><summary>+ Tenant baru</summary>
+            <form class="admin-form" data-form="new-tenant" data-office="${o.id}">
+                <label>Nama perusahaan<input name="company_name" required minlength="2" maxlength="150"></label>
+                <label>Industri<input name="industry" maxlength="100"></label>
+                <label>Email kontak<input name="contact_email" type="email" maxlength="191"></label>
+                <label>Warna brand<input name="brand_color" type="color" value="#22d3ee"></label>
+                <label>Status<select name="status"><option value="pending">pending</option><option value="active">active</option></select></label>
+                <button class="btn btn--primary btn--block" type="submit">Buat &amp; sewakan</button>
+            </form>
+        </details>`}
+        ${officeForm}`;
+}
+
+export function plansPanelHtml(plans) {
+    const num = (name, value, label, step = 1) => `<label>${label}<input name="${name}" type="number" min="0" step="${step}" value="${value}"></label>`;
+    return `
+        <div class="eyebrow">Super Admin</div>
+        <h3>Paket Langganan</h3>
+        <div class="muted">Perubahan berlaku untuk pembelian & perpanjangan baru. Langganan berjalan memakai snapshot harga saat dibeli.</div>
+        ${plans.map((p) => `
+            <form class="admin-form plan-card" data-form="plan" data-plan="${p.id}">
+                <div class="plan-card__head"><b>${esc(p.name)}</b><span class="badge">${esc(p.code)}</span></div>
+                <label>Nama<input name="name" value="${esc(p.name)}" required maxlength="100"></label>
+                <div class="grid-2">
+                    ${num('price', p.price, 'Harga (Rp)', 1000)}
+                    ${num('duration_days', p.duration_days, 'Durasi (hari)')}
+                    ${num('max_agents', p.max_agents, 'Maks. Agent AI')}
+                    ${num('max_operational_rooms', p.max_operational_rooms, 'Ruang operasional')}
+                    ${num('max_offices', p.max_offices, 'Maks. kantor')}
+                    ${num('monthly_token_quota', p.monthly_token_quota, 'Kuota token/bulan', 1000)}
+                </div>
+                <label>Deskripsi<textarea name="description" rows="2" maxlength="2000">${esc(p.description ?? '')}</textarea></label>
+                <label class="check"><input type="checkbox" name="is_active" value="1" ${p.is_active ? 'checked' : ''}> Aktif dijual</label>
+                <label class="check"><input type="checkbox" name="is_custom" value="1" ${p.is_custom ? 'checked' : ''}> Harga custom (kontrak)</label>
+                <button class="btn" type="submit">Simpan ${esc(p.code)}</button>
+            </form>`).join('')}
+    `;
+}

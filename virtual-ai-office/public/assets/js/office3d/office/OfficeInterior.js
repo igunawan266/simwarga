@@ -194,7 +194,7 @@ export class OfficeInterior {
         this.unsubscribe();
         this.stage.scene.remove(this.group);
         this.group.traverse((o) => {
-            o.geometry?.dispose();
+            if (o.geometry && !o.geometry.userData.shared) o.geometry.dispose();
             if (o.material?.map) o.material.map.dispose();
         });
     }

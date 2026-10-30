@@ -7,6 +7,8 @@ const geo = {
     sphere: new THREE.SphereGeometry(0.5, 16, 12),
     capsule: new THREE.CapsuleGeometry(0.3, 0.7, 4, 10),
 };
+// Marked so that disposing one building/interior never frees resources other scenes still use.
+Object.values(geo).forEach((g) => { g.userData.shared = true; });
 const matCache = new Map();
 function mat(color, { metal = 0.2, rough = 0.5, emissive = 0x000000, ei = 1, basic = false, opacity = 1 } = {}) {
     const key = [color, metal, rough, emissive, ei, basic, opacity].join('|');
@@ -15,6 +17,7 @@ function mat(color, { metal = 0.2, rough = 0.5, emissive = 0x000000, ei = 1, bas
         matCache.set(key, basic
             ? new THREE.MeshBasicMaterial(params)
             : new THREE.MeshStandardMaterial({ ...params, metalness: metal, roughness: rough, emissive, emissiveIntensity: ei }));
+        matCache.get(key).userData.shared = true;
     }
     return matCache.get(key);
 }

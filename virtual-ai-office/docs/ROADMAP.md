@@ -16,9 +16,13 @@ Status: ✅ selesai · 🟡 fondasi tersedia · ⬜ belum
 - ✅ Login/logout (session, CSRF, rate limit, audit)
 - ✅ Multi-tenant: TenantFilter + TenantScopedModel + tes isolasi
 - ✅ RBAC filter (`role:`)
-- ⬜ Registrasi tenant & undangan anggota
-- ⬜ CRUD tenant / lantai / ruangan (Super Admin)
-- ⬜ Penegakan limit paket saat membuat agent/ruangan
+- ✅ **2.1 Super Admin: gedung, tenant & paket** — klik lantai di gedung 3D → detail tenant
+  (status, paket, ruangan, agent, anggota); buat tenant; sewakan / kosongkan kantor (atomik,
+  provisioning ruangan sesuai paket, cek batas `max_offices`); harga & status kantor;
+  edit semua harga/limit paket; semua aksi tercatat di `audit_logs`
+- ⬜ 2.2 Anggota tenant: undang user, atur peran owner/admin/staff
+- ⬜ 2.3 Registrasi tenant mandiri + pemilihan lantai (pembayaran menyusul di Phase 4)
+- ⬜ 2.4 Penegakan limit paket saat membuat agent/ruangan (bersama Phase 3)
 
 ## PHASE 3 – AI Engine ⬜
 - ⬜ CRUD Agent (create/edit/delete/activate/deactivate/assign room)

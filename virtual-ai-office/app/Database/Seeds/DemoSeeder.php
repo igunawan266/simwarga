@@ -2,6 +2,7 @@
 
 namespace App\Database\Seeds;
 
+use App\Services\RoomProvisioner;
 use CodeIgniter\Database\Seeder;
 
 /**
@@ -77,7 +78,7 @@ class DemoSeeder extends Seeder
                 'updated_at'      => $this->now,
             ]);
 
-            $rooms = $this->createRooms($tenantId, (int) $office['id'], $plan);
+            $rooms = (new RoomProvisioner($this->db))->provision($tenantId, (int) $office['id'], $plan);
 
             if ($slug === 'nusantara-digital') {
                 $owner = $this->user('owner@demo.test', 'Rani Prasetyo (Demo)', $roles['user'], $hash);
@@ -91,29 +92,6 @@ class DemoSeeder extends Seeder
 
             $this->createAgents($tenantId, $rooms, $full ? null : (int) $plan['max_agents']);
         }
-    }
-
-    /** Creates every room type, enabling only those the plan allows. Returns slug => room id. */
-    private function createRooms(int $tenantId, int $officeId, array $plan): array
-    {
-        $allowed = $plan['allowed_room_types'] ? json_decode($plan['allowed_room_types'], true) : null;
-        $rooms   = [];
-        foreach ($this->db->table('room_types')->orderBy('sort_order')->get()->getResultArray() as $type) {
-            $rooms[$type['slug']] = $this->insert('rooms', [
-                'tenant_id'    => $tenantId,
-                'office_id'    => $officeId,
-                'room_type_id' => $type['id'],
-                'name'         => $type['name'],
-                'description'  => $type['description'],
-                'position'     => $type['layout'],
-                'is_enabled'   => $allowed === null || in_array($type['slug'], $allowed, true) ? 1 : 0,
-                'sort_order'   => $type['sort_order'],
-                'created_at'   => $this->now,
-                'updated_at'   => $this->now,
-            ]);
-        }
-
-        return $rooms;
     }
 
     private function createAgents(int $tenantId, array $rooms, ?int $limit): void

@@ -17,6 +17,23 @@ $routes->group('api/v1', ['namespace' => 'App\Controllers\Api\V1', 'filter' => '
         $routes->get('/', 'OfficeController::show');
         $routes->get('rooms/(:num)', 'OfficeController::room/$1');
     });
+
+    // Super Admin (platform role, cross-tenant by design)
+    $routes->group('admin', ['namespace' => 'App\Controllers\Api\V1\Admin', 'filter' => ['auth', 'role:super_admin']], static function (RouteCollection $routes) {
+        $routes->get('floors', 'BuildingController::floors');
+        $routes->patch('offices/(:num)', 'BuildingController::updateOffice/$1');
+        $routes->post('offices/(:num)/assign', 'BuildingController::assign/$1');
+        $routes->post('offices/(:num)/release', 'BuildingController::release/$1');
+
+        $routes->get('tenants', 'TenantsController::index');
+        $routes->post('tenants', 'TenantsController::create');
+        $routes->get('tenants/(:num)', 'TenantsController::show/$1');
+        $routes->patch('tenants/(:num)', 'TenantsController::update/$1');
+
+        $routes->get('plans', 'PlansController::index');
+        $routes->post('plans', 'PlansController::create');
+        $routes->patch('plans/(:num)', 'PlansController::update/$1');
+    });
 });
 
 // Reserved for Phase 4 (Tripay callback). CSRF is skipped for webhooks/*; the signature check replaces it.

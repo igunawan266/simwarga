@@ -5,7 +5,7 @@ import { api, ApiError } from './core/api.js';
 import { DIM, floorY, floorHeight } from './core/config.js';
 import { Building } from './building/Building.js';
 import { Elevator } from './building/Elevator.js';
-import { Hud, esc } from './ui/Hud.js';
+import { Hud, esc, adminFloorHtml, plansPanelHtml } from './ui/Hud.js';
 
 /**
  * Application controller / state machine.
@@ -42,6 +42,20 @@ class App {
             logout: () => this.logout(),
             'simulate-meeting': () => this.simulateMeeting(),
             escape: () => this.escape(),
+            // Super Admin
+            'admin-plans': () => this.adminPlans(),
+            'admin-release': (d, el) => this.adminRelease(Number(d.office), el),
+            'form:office': (v, f) => this.adminSave(() => api.admin.updateOffice(f.dataset.office, v), 'Kantor disimpan.'),
+            'form:tenant-status': (v, f) => this.adminSave(() => api.admin.updateTenant(f.dataset.tenant, v), 'Status tenant disimpan.', true),
+            'form:assign': (v, f) => this.adminSave(() => api.admin.assignOffice(f.dataset.office, v.tenant_id), 'Kantor berhasil disewakan.', true),
+            'form:new-tenant': (v, f) => this.adminSave(async () => {
+                const tenant = await api.admin.createTenant(v);
+                return api.admin.assignOffice(f.dataset.office, tenant.id);
+            }, 'Tenant dibuat dan kantor disewakan.', true),
+            'form:plan': (v, f) => this.adminSave(
+                () => api.admin.updatePlan(f.dataset.plan, { ...v, is_active: v.is_active ? 1 : 0, is_custom: v.is_custom ? 1 : 0 }),
+                'Paket disimpan.',
+            ),
         });
     }
 
@@ -84,6 +98,73 @@ class App {
         await this.camera.flyTo([95, 62, 120], [0, 26, 0], { duration: 3.2, ease: 'power2.out', limits: { min: 45, max: 320 } });
     }
 
+    isSuperAdmin() {
+        return !!this.session?.user?.is_super_admin;
+    }
+
+    // ---------------------------------------------------------------- super admin
+    async loadAdminFloor(n) {
+        const slot = document.getElementById('admin-floor');
+        if (!slot) return;
+        slot.innerHTML = '<div class="empty">Memuat data admin…</div>';
+        try {
+            const [{ floors }, { tenants }] = await Promise.all([api.admin.floors(), api.admin.tenants()]);
+            const row = floors.find((r) => r.floor.number === n);
+            const detail = row?.tenant ? await api.admin.tenant(row.tenant.id) : null;
+            if (this.selectedFloor !== n) return; // user moved on
+            document.getElementById('admin-floor').innerHTML = adminFloorHtml(row, tenants, detail);
+        } catch (e) {
+            slot.innerHTML = `<div class="empty">${esc(e.message)}</div>`;
+        }
+    }
+
+    async adminPlans() {
+        if (this.mode === 'office' || this.mode === 'room') await this.explore();
+        this.hud.showPanel('<div class="eyebrow">Memuat paket…</div>');
+        try {
+            const { plans } = await api.admin.plans();
+            this.hud.showPanel(plansPanelHtml(plans));
+            document.getElementById('info-panel').classList.add('info-panel--wide');
+        } catch (e) {
+            this.hud.toast(e.message, 'error');
+        }
+    }
+
+    /** Two-step confirm: first click arms the button, second click within 4 s releases the office. */
+    async adminRelease(officeId, el) {
+        if (!el.classList.contains('is-armed')) {
+            el.classList.add('is-armed');
+            el.dataset.label = el.textContent;
+            el.textContent = 'Klik sekali lagi untuk konfirmasi';
+            setTimeout(() => { el.classList.remove('is-armed'); el.textContent = el.dataset.label; }, 4000);
+            return;
+        }
+        await this.adminSave(() => api.admin.releaseOffice(officeId), 'Kantor dikosongkan.', true);
+    }
+
+    /** Run an admin mutation; on success optionally rebuild the building from fresh directory data. */
+    async adminSave(fn, message, rebuild = false) {
+        try {
+            await fn();
+        } catch (e) {
+            this.hud.toast(e.message, 'error', 5000);
+            return;
+        }
+        this.hud.toast(message);
+        if (rebuild) {
+            this.directory = await api.building();
+            this.building.dispose();
+            this.building = new Building(this.stage, this.directory);
+            this.building.setMine(this.myFloor());
+            this.building.setActive(this.selectedFloor);
+            this.hud.renderFloors(this.directory.floors, { mine: this.myFloor() });
+            if (this.selectedFloor !== null && this.mode === 'explore') {
+                this.hud.floorPanel(this.building.floorData(this.selectedFloor), { isMine: false, loggedIn: true });
+                this.loadAdminFloor(this.selectedFloor);
+            }
+        }
+    }
+
     myFloor() {
         return this.session?.tenant?.office?.floor_number ?? null;
     }
@@ -109,6 +190,7 @@ class App {
         this.hud.highlightFloor(n);
         const f = this.building.floorData(n);
         this.hud.floorPanel(f, { isMine: n === this.myFloor(), loggedIn: !!this.session?.authenticated });
+        if (this.isSuperAdmin()) this.loadAdminFloor(n);
         this.hud.breadcrumb([this.directory.building.name, `Floor ${String(n).padStart(2, '0')}`]);
         const y = floorY(n) + floorHeight(n) / 2;
         await this.camera.flyTo([38, y + 14, 62], [0, y, 0], { duration: 1.6, limits: { min: 30, max: 320 } });
@@ -262,6 +344,7 @@ class App {
 
     closePanel() {
         this.hud.hidePanel();
+        document.getElementById('info-panel').classList.remove('info-panel--wide');
         if (this.mode === 'explore') {
             this.building?.setActive(null);
             this.hud.highlightFloor(null);

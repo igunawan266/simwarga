@@ -238,3 +238,27 @@ button { font: inherit; color: inherit; }
 @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; }
 }
+
+/* ---------- Super Admin forms ---------- */
+.admin-form { display: grid; gap: 10px; margin: 12px 0; }
+.admin-form label { display: block; font-size: 12px; color: var(--silver); }
+.admin-form input:not([type="checkbox"]), .admin-form select, .admin-form textarea {
+    display: block; width: 100%; margin-top: 5px; padding: 9px 10px; border-radius: 9px; border: 1px solid var(--line);
+    background: rgba(255,255,255,.04); color: var(--white); font: inherit; font-size: 13px;
+}
+.admin-form input[type="color"] { padding: 2px; height: 36px; }
+.admin-form select option { background: var(--navy-900); }
+.admin-form input:focus, .admin-form select:focus, .admin-form textarea:focus { outline: none; border-color: var(--cyan); box-shadow: 0 0 0 3px rgba(34,211,238,.18); }
+.admin-form .check { display: flex; align-items: center; gap: 8px; }
+.admin-form .btn { justify-self: start; }
+.admin-form .btn--block { justify-self: stretch; }
+.grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.plan-card { padding: 14px; border-radius: 12px; background: rgba(255,255,255,.035); border: 1px solid var(--line); }
+.plan-card__head { display: flex; justify-content: space-between; align-items: center; font-size: 15px; }
+.admin-details summary { cursor: pointer; color: var(--cyan); font-size: 13px; margin: 6px 0; }
+.btn--danger { border-color: rgba(248,113,113,.5); color: #fca5a5; }
+.btn--danger:hover { background: rgba(248,113,113,.12); border-color: var(--danger); }
+.btn--danger.is-armed { background: var(--danger); color: #1b0606; }
+.small { font-size: 11px; margin: 6px 0 0; }
+.info-panel--wide { width: 420px; }
+@media (max-width: 820px) { .info-panel--wide { width: auto; } .session .btn[data-action="admin-plans"] { display: none; } }

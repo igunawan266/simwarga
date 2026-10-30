@@ -34,7 +34,26 @@ export class Building {
         this.buildRoof();
 
         stage.scene.add(this.group);
-        stage.onUpdate((dt, t) => this.update(dt, t));
+        this.unsubscribe = stage.onUpdate((dt, t) => this.update(dt, t));
+    }
+
+    /** Free GPU resources (used when the directory changes and the tower is rebuilt). */
+    dispose() {
+        this.unsubscribe();
+        this.stage.scene.remove(this.group);
+        const seen = new Set();
+        this.group.traverse((o) => {
+            if (o.geometry && !o.geometry.userData.shared) o.geometry.dispose();
+            const mats = Array.isArray(o.material) ? o.material : o.material ? [o.material] : [];
+            mats.forEach((m) => {
+                if (seen.has(m)) return;
+                seen.add(m);
+                m.map?.dispose();
+                m.emissiveMap?.dispose();
+                // Furniture materials are shared caches; only dispose ones this building created.
+                if (!m.userData.shared) m.dispose();
+            });
+        });
     }
 
     // ---------------------------------------------------------------- environment

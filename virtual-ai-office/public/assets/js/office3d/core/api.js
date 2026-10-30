@@ -37,4 +37,16 @@ export const api = {
     logout: () => request('POST', 'session/logout'),
     office: () => request('GET', 'office'),
     room: (id) => request('GET', `office/rooms/${encodeURIComponent(id)}`),
+    admin: {
+        floors: () => request('GET', 'admin/floors'),
+        tenants: () => request('GET', 'admin/tenants'),
+        tenant: (id) => request('GET', `admin/tenants/${Number(id)}`),
+        createTenant: (data) => request('POST', 'admin/tenants', data),
+        updateTenant: (id, data) => request('PATCH', `admin/tenants/${Number(id)}`, data),
+        updateOffice: (id, data) => request('PATCH', `admin/offices/${Number(id)}`, data),
+        assignOffice: (id, tenantId) => request('POST', `admin/offices/${Number(id)}/assign`, { tenant_id: tenantId }),
+        releaseOffice: (id) => request('POST', `admin/offices/${Number(id)}/release`),
+        plans: () => request('GET', 'admin/plans'),
+        updatePlan: (id, data) => request('PATCH', `admin/plans/${Number(id)}`, data),
+    },
 };
