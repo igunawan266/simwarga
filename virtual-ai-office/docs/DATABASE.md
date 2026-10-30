@@ -1,6 +1,6 @@
 # Skema Database — Virtual AI Office
 
-26 tabel, MySQL 8 / MariaDB 10.6+ (InnoDB, utf8mb4). Migrasi juga berjalan di SQLite
+27 tabel, MySQL 8 / MariaDB 10.6+ (InnoDB, utf8mb4). Migrasi juga berjalan di SQLite
 untuk test. Semua uang disimpan sebagai **BIGINT Rupiah utuh** (Tripay memakai integer IDR).
 Kolom JSON memakai tipe `JSON` di MySQL dan `TEXT` di SQLite.
 
@@ -88,6 +88,13 @@ erDiagram
 | `agent_tasks` | `parent_task_id` (multi-agent), `assigned_by_user_id/agent_id`, status, token, attempts, timestamps eksekusi |
 | `agent_logs` | jejak eksekusi (llm_call, tool_call, delegation, error) dengan token & durasi |
 | `agent_conversations` | pesan user↔agent dan agent↔agent per `thread_id` |
+
+### Notifikasi (`000009`)
+| Tabel | Catatan |
+|---|---|
+| `notifications` | per tenant; `audience` all/billing (billing hanya Owner/Admin); `type`, `title`, `body`, `data` JSON, `read_at` |
+
+`invoices.kind` (`000009`): `initial` (registrasi) atau `renewal` (perpanjangan).
 
 ### Pengaturan & audit (`000006`)
 | Tabel | Catatan |

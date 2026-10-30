@@ -110,7 +110,7 @@ class RegistrationService
             'tenant_id'       => $tenantId,
             'subscription_id' => $subscriptionId,
             'plan_id'         => $plan['id'],
-            'invoice_number'  => $this->invoiceNumber(),
+            'invoice_number'  => InvoiceNumber::next(),
             'description'     => "Langganan {$plan['name']} — Suite {$office['office_number']}",
             'subtotal'        => $subtotal,
             'fee'             => 0, // payment channel fee is added when a channel is chosen (Phase 4)
@@ -128,6 +128,9 @@ class RegistrationService
 
         $db->transComplete();
 
+        (new NotificationService())->notify($tenantId, 'invoice.created', 'Kantor di-reserve, invoice dibuat',
+            "Suite {$office['office_number']} di-reserve sampai {$reservedTill}. Bayar invoice sebesar Rp " . number_format($subtotal, 0, ',', '.') . ' untuk mengaktifkan langganan.',
+            ['invoice_id' => $invoiceId]);
         Services::auditLogger()->record('tenant.register', [
             'tenant_id' => $tenantId, 'user_id' => $userId, 'entity_type' => 'tenant', 'entity_id' => $tenantId,
             'new' => ['plan' => $plan['code'], 'office' => $office['office_number'], 'invoice_id' => $invoiceId],
@@ -142,16 +145,6 @@ class RegistrationService
         $db->table($table)->insert($row);
 
         return (int) $db->insertID();
-    }
-
-    private function invoiceNumber(): string
-    {
-        $db = Database::connect();
-        do {
-            $number = 'INV-' . date('Ymd') . '-' . strtoupper(bin2hex(random_bytes(3)));
-        } while ($db->table('invoices')->where('invoice_number', $number)->countAllResults() > 0);
-
-        return $number;
     }
 
     private function uniqueSlug(string $name): string

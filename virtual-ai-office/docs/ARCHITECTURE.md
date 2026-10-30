@@ -32,7 +32,7 @@ virtual-ai-office/
 │   │   └── Api/V1/                      REST JSON: Building, Session, Office
 │   ├── Database/
 │   │   ├── BaseMigration.php           helper kolom (id, fk, money, json, timestamps)
-│   │   ├── Migrations/                 6 migrasi per domain (26 tabel)
+│   │   ├── Migrations/                 6 migrasi per domain (27 tabel)
 │   │   └── Seeds/                      CoreSeeder (wajib) + DemoSeeder (non-production)
 │   ├── Exceptions/                     TenantContextException
 │   ├── Filters/                        AuthFilter, TenantFilter, RoleFilter, ThrottleFilter

@@ -37,12 +37,18 @@ class SubscriptionActivator
             $sub['office_id'] = null;
         }
 
-        // Subscription period: new subscription starts now; a renewal extends from the current end.
-        $base   = ($sub['status'] === 'active' && $sub['ends_at'] && strtotime($sub['ends_at']) > strtotime($paidAt)) ? $sub['ends_at'] : $paidAt;
+        // Period: active renews from its current end; past_due continues from the old end (grace days
+        // already used are not free); a new, pending or expired subscription starts at payment time.
+        $continuing = in_array($sub['status'], ['active', 'past_due'], true) && $sub['ends_at'];
+        $base       = match (true) {
+            $sub['status'] === 'active' && $continuing => max($sub['ends_at'], $paidAt),
+            $sub['status'] === 'past_due' && $continuing => $sub['ends_at'],
+            default => $paidAt,
+        };
         $endsAt = date('Y-m-d H:i:s', strtotime("{$base} +{$days} days"));
         $this->db->table('tenant_subscriptions')->where('id', $sub['id'])->update([
             'status'       => 'active',
-            'starts_at'    => $sub['starts_at'] && $sub['status'] === 'active' ? $sub['starts_at'] : $paidAt,
+            'starts_at'    => $continuing && $sub['starts_at'] ? $sub['starts_at'] : $paidAt,
             'ends_at'      => $endsAt,
             'office_id'    => $sub['office_id'],
             'cancelled_at' => null,

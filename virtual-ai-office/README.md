@@ -50,7 +50,19 @@ php spark office:expire-reservations
 php spark tripay:sync-channels
 ```
 
-4. Mode sandbox: lakukan pembayaran uji, lalu tandai lunas lewat simulator di dashboard sandbox Tripay —
+4. Jadwalkan cron:
+
+```bash
+php spark office:subscriptions
+```
+(per jam — invoice perpanjangan, past_due, expired)
+
+```bash
+php spark tripay:reconcile
+```
+(setiap 15 menit — pulihkan callback yang terlewat)
+
+5. Mode sandbox: lakukan pembayaran uji, lalu tandai lunas lewat simulator di dashboard sandbox Tripay —
    callback akan mengaktifkan langganan tenant secara otomatis.
 
 ### Akun demo (dibuat oleh `DemoSeeder`, tidak pernah di production)
@@ -96,7 +108,7 @@ update `tenant_id`, delete lintas tenant).
 ## Dokumentasi
 
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — arsitektur, struktur folder, multi-tenancy, keamanan, 3D
-- [docs/DATABASE.md](docs/DATABASE.md) — skema 26 tabel + ERD
+- [docs/DATABASE.md](docs/DATABASE.md) — skema 27 tabel + ERD
 - [docs/ROADMAP.md](docs/ROADMAP.md) — status per phase
 
 ## API (v1)
@@ -117,6 +129,10 @@ update `tenant_id`, delete lintas tenant).
 | GET | `/api/v1/office/invoices/{id}/payments` | owner/admin — status pembayaran (polling) |
 | POST | `/webhooks/tripay` | Tripay — callback ber-signature HMAC (tanpa CSRF/session) |
 | GET / POST | `/api/v1/admin/payment-channels[/sync]` | super_admin — status gateway, sinkron kanal |
+| GET | `/api/v1/office/invoices/{id}/pdf` | owner/admin — unduh invoice PDF |
+| POST | `/api/v1/office/subscription/renew` | owner/admin — buat/ambil invoice perpanjangan |
+| GET / POST | `/api/v1/office/notifications[/read]` | anggota — notifikasi (billing hanya owner/admin) |
+| GET | `/api/v1/admin/invoices/{id}/pdf` | super_admin — invoice PDF tenant mana pun |
 | GET | `/api/v1/office/members` | auth + tenant — daftar anggota |
 | POST | `/api/v1/office/members` | owner/admin — undang (`email`, `role`) → `invite_url` |
 | PATCH / DELETE | `/api/v1/office/members/{id}` | owner/admin — ubah peran/status, hapus |

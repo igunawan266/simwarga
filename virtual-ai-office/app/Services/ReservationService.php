@@ -43,6 +43,8 @@ class ReservationService
             }
             $db->transComplete();
 
+            (new NotificationService())->notify($tenantId, 'reservation.expired', 'Reservasi kantor berakhir',
+                'Invoice tidak dibayar sebelum batas waktu, sehingga kantor dilepas. Anda dapat memesan lantai yang tersedia kembali.');
             Services::auditLogger()->record('reservation.expired', [
                 'tenant_id' => $tenantId, 'entity_type' => 'office', 'entity_id' => (int) $office['id'],
                 'old' => ['reserved_until' => $office['reserved_until']],

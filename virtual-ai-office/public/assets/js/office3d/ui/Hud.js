@@ -73,8 +73,9 @@ export class Hud {
         const sub = session.user.is_super_admin ? 'Super Admin' : t ? `${t.name} · ${t.role.replace('tenant_', '')}` : 'Tanpa kantor tenant';
         const admin = session.user.is_super_admin
             ? '<button class="btn" data-action="admin-plans">Kelola Paket</button>'
-            : ['tenant_owner', 'tenant_admin'].includes(t?.role) ? `<button class="btn" data-action="billing">Tagihan${t.status === 'pending' ? ' <span class="dot-warn"></span>' : ''}</button>` : '';
-        el.innerHTML = `${admin}<div class="user-chip"><span class="avatar">${initials(session.user.name)}</span>
+            : ['tenant_owner', 'tenant_admin'].includes(t?.role) ? `<button class="btn" data-action="billing">Tagihan${t.status !== 'active' ? ' <span class="dot-warn"></span>' : ''}</button>` : '';
+        const bell = t ? '<button class="btn btn--bell" data-action="notifications" aria-label="Notifikasi"><span class="bell"></span><span class="badge-count" id="notif-count" hidden></span></button>' : '';
+        el.innerHTML = `${bell}${admin}<div class="user-chip"><span class="avatar">${initials(session.user.name)}</span>
             <div>${esc(session.user.name)}<small>${esc(sub)}</small></div></div>
             <button class="btn" data-action="logout">Logout</button>`;
     }
@@ -108,7 +109,8 @@ export class Hud {
         $('#floor-list').innerHTML = [...floors].reverse().map((f) => {
             const t = f.tenant;
             const st = f.office?.status;
-            const label = f.number === 0 ? 'Main Lobby' : t ? t.name : st === 'reserved' ? 'Reserved' : st === 'maintenance' ? 'Maintenance' : 'Tersedia untuk disewa';
+            const label = f.number === 0 ? 'Main Lobby' : t ? t.name
+                : st === 'reserved' ? 'Reserved' : st === 'occupied' ? 'Disewa' : st === 'maintenance' ? 'Maintenance' : 'Tersedia untuk disewa';
             const sub = f.number === 0 ? 'Resepsionis & directory' : t ? `${f.office?.number ?? ''} · ${t.industry ?? ''}` : f.office?.number ?? '';
             const color = f.number === 0 ? '#c0c8d4' : t ? t.color : st === 'reserved' ? '#fbbf24' : '#334155';
             return `<li><button class="floor-item ${f.number === mine ? 'is-mine' : ''}" data-action="floor" data-floor="${f.number}">
@@ -139,7 +141,7 @@ export class Hud {
         if (f.number === 0) return this.lobbyPanel();
         const st = f.office?.status;
         const vacant = !t && st === 'available';
-        const status = t ? 'Occupied' : st === 'reserved' ? 'Reserved' : st === 'maintenance' ? 'Maintenance' : 'Available';
+        const status = t || st === 'occupied' ? 'Occupied' : st === 'reserved' ? 'Reserved' : st === 'maintenance' ? 'Maintenance' : 'Available';
         let action = '';
         if (isMine && minePending) {
             action = '<button class="btn btn--primary btn--block" data-action="billing">Lihat tagihan</button>';
@@ -150,10 +152,11 @@ export class Hud {
         }
         const desc = t ? t.industry ?? '' : st === 'reserved'
             ? 'Lantai ini sedang dipesan dan menunggu pembayaran.'
+            : st === 'occupied' ? 'Kantor ini disewa tenant yang sedang tidak aktif.'
             : st === 'maintenance' ? 'Lantai ini sedang dalam perawatan.' : 'Lantai ini tersedia untuk disewa tenant baru.';
         this.showPanel(`
             <div class="eyebrow">Floor ${String(f.number).padStart(2, '0')}</div>
-            <h3>${esc(t ? t.name : st === 'reserved' ? 'Reserved Office' : 'Available Office')}</h3>
+            <h3>${esc(t ? t.name : st === 'reserved' ? 'Reserved Office' : st === 'occupied' ? 'Leased Office' : 'Available Office')}</h3>
             <div class="muted">${esc(desc)}</div>
             <dl class="kv">
                 <dt>Nomor kantor</dt><dd>${esc(f.office?.number ?? '—')}</dd>
@@ -521,6 +524,13 @@ export function billingPanelHtml(b) {
     const s = b.subscription;
     const pending = s?.status === 'pending';
     const reservedUntil = b.office?.status === 'reserved' && b.office.reserved_until;
+    const base = document.querySelector('meta[name="base-url"]')?.content ?? '';
+    const hasOpenInvoice = b.invoices.some((i) => i.status === 'unpaid');
+    const canRenew = s && ['active', 'past_due', 'expired', 'trial'].includes(s.status) && !hasOpenInvoice;
+    const banner = s?.status === 'past_due'
+        ? '<div class="prototype-box"><b>LEWAT JATUH TEMPO</b>Kantor masih bisa dipakai selama masa tenggang. Bayar invoice perpanjangan agar akses tidak terhenti.</div>'
+        : s?.status === 'expired' || b.tenant_status === 'expired'
+            ? '<div class="prototype-box"><b>LANGGANAN BERAKHIR</b>Akses kantor dihentikan sementara. Data, ruangan dan Agent AI tetap tersimpan — perpanjang untuk membukanya kembali.</div>' : '';
     const statusLabel = { pending: 'Menunggu pembayaran', trial: 'Trial', active: 'Aktif', expired: 'Kedaluwarsa', cancelled: 'Dibatalkan', past_due: 'Lewat jatuh tempo' };
     return `
         <div class="eyebrow">Tagihan &amp; Langganan</div>
@@ -532,6 +542,8 @@ export function billingPanelHtml(b) {
             ${s?.ends_at ? `<dt>Berakhir</dt><dd>${esc(s.ends_at)}</dd>` : ''}
         </dl>
         ${reservedUntil ? '<div class="prototype-box"><b>RESERVASI SEMENTARA</b>Bayar invoice sebelum batas waktu. Jika lewat, kantor otomatis dilepas dan invoice kedaluwarsa.</div>' : ''}
+        ${banner}
+        ${canRenew ? '<button class="btn btn--primary btn--block" data-action="renew">Perpanjang langganan</button>' : ''}
         <div class="section-label">Invoice</div>
         ${b.invoices.map((i) => `
             <div class="invoice-card">
@@ -543,6 +555,7 @@ export function billingPanelHtml(b) {
                     <button class="btn btn--primary btn--block" data-action="pay-invoice" data-invoice="${i.id}">Bayar via Tripay</button>
                     <small class="muted">Virtual Account, QRIS, E-Wallet dan kanal lain yang aktif di akun merchant.</small>` : ''}
                 ${i.status === 'paid' ? `<small>Lunas ${esc(i.paid_at ?? '')}</small>` : ''}
+                <a class="btn" href="${esc(base)}/api/v1/office/invoices/${i.id}/pdf" download>Unduh PDF</a>
             </div>`).join('') || '<div class="empty">Belum ada invoice.</div>'}
         ${!pending && b.tenant_status === 'active' ? '<button class="btn btn--block" data-action="enter-office">Masuk kantor</button>' : ''}`;
 }
@@ -596,4 +609,25 @@ export function paymentPanelHtml(p, invoiceId) {
         <p class="muted small">Status diperbarui otomatis setelah Tripay mengonfirmasi pembayaran. Menutup halaman ini tidak membatalkan pembayaran.</p>
         <button class="btn btn--block" data-action="check-payment" data-invoice="${invoiceId}">Cek status pembayaran</button>
         <button class="btn btn--block" style="margin-top:8px" data-action="pay-invoice" data-invoice="${invoiceId}">Ganti metode</button>`;
+}
+
+// ---------------------------------------------------------------------- notifications
+export function notificationsPanelHtml(items) {
+    return `
+        <div class="eyebrow">Kantor Anda</div>
+        <h3>Notifikasi</h3>
+        ${items.map((n) => `
+            <div class="notif ${n.read ? '' : 'is-unread'}">
+                <b>${esc(n.title)}</b>
+                <p>${esc(n.body)}</p>
+                <small>${esc(n.created_at)}</small>
+                ${n.data?.invoice_id ? '<button class="btn" data-action="billing">Lihat tagihan</button>' : ''}
+            </div>`).join('') || '<div class="empty">Belum ada notifikasi.</div>'}`;
+}
+
+export function setUnread(count) {
+    const el = document.getElementById('notif-count');
+    if (!el) return;
+    el.textContent = count > 9 ? '9+' : String(count);
+    el.hidden = count === 0;
 }

@@ -24,7 +24,8 @@ class TenantMemberModel extends Model
             ->where('tenant_members.user_id', $userId)
             ->where('tenant_members.status', 'active')
             ->where('tenants.deleted_at', null)
-            ->whereIn('tenants.status', ['active', 'pending']) // pending = registered, awaiting first payment
+            // pending = awaiting first payment, expired = may still log in to renew; suspended is locked out
+            ->whereIn('tenants.status', ['active', 'pending', 'expired'])
             ->orderBy('tenant_members.id')
             ->findAll();
     }

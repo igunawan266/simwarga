@@ -12,7 +12,7 @@ Status: ✅ selesai · 🟡 fondasi tersedia · ⬜ belum
 - ✅ Agent AI sebagai karakter robot (instanced), warna visor = status, jalan ke pantry, simulasi rapat (visual)
 
 ## PHASE 2 – Core SaaS 🟡
-- ✅ Skema database lengkap (26 tabel) + seeder
+- ✅ Skema database lengkap (27 tabel) + seeder
 - ✅ Login/logout (session, CSRF, rate limit, audit)
 - ✅ Multi-tenant: TenantFilter + TenantScopedModel + tes isolasi
 - ✅ RBAC filter (`role:`)
@@ -51,7 +51,14 @@ Status: ✅ selesai · 🟡 fondasi tersedia · ⬜ belum
   langganan aktif (+durasi), kantor occupied, tenant active; status EXPIRED/FAILED/REFUND dicatat;
   pembayaran yang telat setelah reservasi lepas mengklaim ulang kantor bila masih kosong;
   redirect browser tidak mengaktifkan apa pun
-- ⬜ 4.2 Invoice PDF, renewal & expiry langganan (cron), notifikasi, rekonsiliasi transaksi, alur refund admin
+- ✅ **4.2 Siklus langganan & billing** — `php spark office:subscriptions` (per jam): invoice
+  perpanjangan otomatis `renewal_days_before` hari sebelum berakhir (harga paket terkini), `past_due`
+  (akses tetap selama `grace_period_days`), lalu `expired` (akses diblokir, data & kantor tetap);
+  tenant bisa *Perpanjang langganan* kapan saja; pembayaran saat `past_due` melanjutkan dari tanggal
+  berakhir lama. **Invoice PDF** (dompdf, tanpa resource eksternal). **Rekonsiliasi**
+  `php spark tripay:reconcile` (15 menit) memulihkan callback yang hilang lewat jalur idempoten yang
+  sama. **Notifikasi in-app** (lonceng; item billing hanya untuk Owner/Admin) + email bila SMTP diisi.
+- ⬜ Alur refund & tinjauan pembayaran oleh Super Admin (dipindah ke Phase 5)
 
 ## PHASE 5 – Admin & Reporting ⬜
 - ⬜ Dashboard Super Admin (+ gedung 3D: klik lantai → tenant → profil/agent/langganan)

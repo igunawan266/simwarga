@@ -5,7 +5,7 @@ import { api, ApiError } from './core/api.js';
 import { DIM, floorY, floorHeight } from './core/config.js';
 import { Building } from './building/Building.js';
 import { Elevator } from './building/Elevator.js';
-import { Hud, esc, adminFloorHtml, plansPanelHtml, teamPanelHtml, registerPanelHtml, billingPanelHtml, channelsPanelHtml, paymentPanelHtml } from './ui/Hud.js';
+import { Hud, esc, adminFloorHtml, plansPanelHtml, teamPanelHtml, registerPanelHtml, billingPanelHtml, channelsPanelHtml, paymentPanelHtml, notificationsPanelHtml, setUnread } from './ui/Hud.js';
 
 /**
  * Application controller / state machine.
@@ -57,6 +57,8 @@ class App {
             'form:register': (v, f) => this.submitRegister(v, f),
             billing: () => this.openBilling(),
             'pay-invoice': (d) => this.openChannels(Number(d.invoice)),
+            renew: (d, el) => this.renew(el),
+            notifications: () => this.openNotifications(),
             'pay-with': (d, el) => this.payWith(Number(d.invoice), d.method, el),
             'check-payment': (d) => this.checkPayment(Number(d.invoice), true),
             'admin-sync-channels': (d, el) => this.adminSyncChannels(el),
@@ -101,6 +103,7 @@ class App {
         this.elevator = new Elevator(this.stage, this.building);
 
         this.hud.renderSession(this.session);
+        this.watchNotifications();
         this.hud.renderFloors(directory.floors, { mine: this.myFloor() });
         this.building.setMine(this.myFloor());
         this.bindPointer(canvas);
@@ -274,9 +277,45 @@ class App {
         }
         this.session = await api.session();
         this.hud.renderSession(this.session);
+        this.watchNotifications();
         await this.refreshBuilding();
         this.hud.toast('Kantor berhasil di-reserve. Invoice telah dibuat.');
         this.openBilling();
+    }
+
+    // ---------------------------------------------------------------- notifications
+    /** Refresh the unread badge now and every 60 s while a tenant member is logged in. */
+    watchNotifications() {
+        clearInterval(this.notifTimer);
+        if (!this.session?.tenant) return;
+        const tick = () => !document.hidden && api.notifications().then((r) => setUnread(r.unread)).catch(() => {});
+        tick();
+        this.notifTimer = setInterval(tick, 60000);
+    }
+
+    async openNotifications() {
+        try {
+            const { notifications } = await api.notifications();
+            this.hud.showPanel(notificationsPanelHtml(notifications));
+            if (notifications.some((n) => !n.read)) {
+                await api.markNotificationsRead();
+                setUnread(0);
+            }
+        } catch (e) {
+            this.hud.toast(e.message, 'error');
+        }
+    }
+
+    async renew(el) {
+        el.disabled = true;
+        try {
+            const { invoice } = await api.renewSubscription();
+            this.hud.toast(`Invoice perpanjangan ${invoice.number} siap dibayar.`);
+            this.openChannels(invoice.id);
+        } catch (e) {
+            this.hud.toast(e.message, 'error', 5000);
+            el.disabled = false;
+        }
     }
 
     async adminSyncChannels(el) {
@@ -342,6 +381,7 @@ class App {
             this.stopPaymentPolling();
             this.session = await api.session();
             this.hud.renderSession(this.session);
+            this.watchNotifications();
             await this.refreshBuilding();
             this.hud.toast('Pembayaran terkonfirmasi. Langganan aktif — selamat datang di kantor Anda!');
             this.closePanel();
@@ -387,7 +427,7 @@ class App {
         const f = this.building.floorData(n);
         this.hud.floorPanel(f, {
             isMine: n === this.myFloor(),
-            minePending: this.session?.tenant?.status === 'pending',
+            minePending: !!this.session?.tenant && this.session.tenant.status !== 'active',
             isSuperAdmin: this.isSuperAdmin(),
         });
         if (this.isSuperAdmin()) this.loadAdminFloor(n);
@@ -587,6 +627,7 @@ class App {
         }
         this.hud.closeLogin();
         this.hud.renderSession(this.session);
+        this.watchNotifications();
         this.hud.renderFloors(this.directory.floors, { mine: this.myFloor() });
         this.building.setMine(this.myFloor());
         if (this.session.tenant?.office) {
@@ -603,6 +644,7 @@ class App {
         this.session = { authenticated: false };
         this.office = null;
         this.hud.renderSession(this.session);
+        this.watchNotifications();
         this.hud.renderFloors(this.directory.floors);
         this.building.setMine(null);
         if (this.mode === 'office' || this.mode === 'room') {

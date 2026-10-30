@@ -122,6 +122,53 @@ class CallbackService
         return [200, ['success' => true]];
     }
 
+    /**
+     * Reconciliation for a missed callback: asks Tripay for the transaction and applies a
+     * final status through the same idempotent path. Returns the resulting log status.
+     */
+    public function reconcile(array $payment): string
+    {
+        $db     = Database::connect();
+        $remote = Services::tripay()->transactionDetail((string) $payment['provider_reference']);
+        $status = strtoupper((string) ($remote['status'] ?? ''));
+        if (($remote['merchant_ref'] ?? null) !== $payment['merchant_ref'] || $status === 'UNPAID' || $status === '') {
+            return 'unchanged';
+        }
+
+        $hash = hash('sha256', "reconcile\n{$payment['merchant_ref']}\n{$status}");
+        if ($db->table('payment_callbacks')->where('event_hash', $hash)->whereIn('process_status', ['processed', 'duplicate', 'rejected'])->countAllResults() > 0) {
+            return 'already_reconciled';
+        }
+        $db->table('payment_callbacks')->ignore(true)->insert([
+            'provider' => 'tripay', 'event' => 'reconcile', 'event_hash' => $hash, 'merchant_ref' => $payment['merchant_ref'],
+            'provider_reference' => $payment['provider_reference'], 'payment_id' => $payment['id'], 'signature_valid' => 1,
+            'process_status' => 'received', 'raw_body' => json_encode($remote), 'created_at' => date('Y-m-d H:i:s'), 'updated_at' => date('Y-m-d H:i:s'),
+        ]);
+        $logId = (int) $db->table('payment_callbacks')->where('event_hash', $hash)->get()->getRow()->id;
+
+        if ($status === 'PAID') {
+            // The transaction "amount" from Tripay includes the customer fee, like transaction/create.
+            $net = (int) ($remote['amount'] ?? $remote['total_amount'] ?? 0) - (int) ($remote['fee_customer'] ?? 0);
+            if ($net !== (int) $payment['amount']) {
+                $this->reject($logId, 400, "Rekonsiliasi: nominal tidak cocok ({$net} ≠ {$payment['amount']}); tinjau manual.");
+
+                return 'rejected';
+            }
+            [$code] = $this->applyPaid($logId, $payment, $remote + ['total_amount' => $net + (int) ($remote['fee_customer'] ?? 0)]);
+
+            return $code === 200 ? 'paid' : 'error';
+        }
+        if (in_array($status, ['EXPIRED', 'FAILED'], true)) {
+            $db->table('payments')->where('id', $payment['id'])->where('status', 'UNPAID')->update(['status' => $status, 'updated_at' => date('Y-m-d H:i:s')]);
+            $this->updateLog($logId, 'processed', "Rekonsiliasi: {$status}.");
+
+            return strtolower($status);
+        }
+        $this->updateLog($logId, 'processed', "Rekonsiliasi: status {$status} dicatat.");
+
+        return 'unchanged';
+    }
+
     private function applyPaid(int $logId, array $payment, array $data): array
     {
         $db     = Database::connect();
@@ -164,6 +211,11 @@ class CallbackService
         }
 
         $this->updateLog($logId, 'processed', "PAID → {$outcome}");
+        (new \App\Services\NotificationService())->notify((int) $payment['tenant_id'], 'payment.paid', 'Pembayaran diterima',
+            "Pembayaran {$payment['merchant_ref']} terkonfirmasi. " . ($outcome === 'activated'
+                ? 'Langganan Anda aktif.'
+                : 'Kantor yang dipesan sudah tidak tersedia; tim kami akan menghubungi Anda.'),
+            ['payment_id' => (int) $payment['id'], 'outcome' => $outcome]);
         Services::auditLogger()->record('payment.paid', [
             'tenant_id' => (int) $payment['tenant_id'], 'entity_type' => 'payment', 'entity_id' => (int) $payment['id'],
             'new' => ['merchant_ref' => $payment['merchant_ref'], 'outcome' => $outcome],

@@ -209,7 +209,7 @@ export class Building {
             ctx.fillText(String(data.number).padStart(2, '0'), 34, h / 2);
             ctx.fillStyle = t ? '#f5f8fc' : '#8da2bf';
             ctx.font = `600 ${t ? 46 : 40}px "Space Grotesk", Inter, sans-serif`;
-            const vacantLabel = data.office?.status === 'reserved' ? 'RESERVED · MENUNGGU PEMBAYARAN' : data.office?.status === 'maintenance' ? 'MAINTENANCE' : 'AVAILABLE · FOR LEASE';
+            const vacantLabel = { reserved: 'RESERVED · MENUNGGU PEMBAYARAN', occupied: 'LEASED', maintenance: 'MAINTENANCE' }[data.office?.status] ?? 'AVAILABLE · FOR LEASE';
             if (!t && data.office?.status === 'reserved') ctx.fillStyle = '#fbbf24';
             ctx.fillText(fit(ctx, t ? t.name : vacantLabel, 700), 130, h / 2 - (t ? 10 : 0));
             if (t) {

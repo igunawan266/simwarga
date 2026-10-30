@@ -26,7 +26,11 @@ $routes->group('api/v1', ['namespace' => 'App\Controllers\Api\V1', 'filter' => '
             $routes->get('invoices/(:num)/channels', 'PaymentController::channels/$1');
             $routes->post('invoices/(:num)/pay', 'PaymentController::pay/$1');
             $routes->get('invoices/(:num)/payments', 'PaymentController::status/$1');
+            $routes->get('invoices/(:num)/pdf', 'PaymentController::pdf/$1');
+            $routes->post('subscription/renew', 'PaymentController::renew');
         });
+        $routes->get('notifications', 'NotificationsController::index');
+        $routes->post('notifications/read', 'NotificationsController::markRead');
         $routes->get('members', 'MembersController::index');
         $routes->group('members', ['filter' => 'role:tenant_owner,tenant_admin'], static function (RouteCollection $routes) {
             $routes->post('/', 'MembersController::invite');
@@ -52,6 +56,7 @@ $routes->group('api/v1', ['namespace' => 'App\Controllers\Api\V1', 'filter' => '
         $routes->delete('tenants/(:num)/members/(:num)', 'TenantMembersController::removeFor/$1/$2');
         $routes->post('tenants/(:num)/members/(:num)/reinvite', 'TenantMembersController::reinviteFor/$1/$2');
 
+        $routes->get('invoices/(:num)/pdf', 'PaymentChannelsController::invoicePdf/$1');
         $routes->get('payment-channels', 'PaymentChannelsController::index');
         $routes->post('payment-channels/sync', 'PaymentChannelsController::sync');
 

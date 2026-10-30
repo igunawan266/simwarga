@@ -42,6 +42,9 @@ export const api = {
     plans: () => request('GET', 'plans'),
     register: (data) => request('POST', 'register', data),
     billing: () => request('GET', 'office/billing'),
+    renewSubscription: () => request('POST', 'office/subscription/renew'),
+    notifications: () => request('GET', 'office/notifications'),
+    markNotificationsRead: () => request('POST', 'office/notifications/read'),
     payments: {
         channels: (invoiceId) => request('GET', `office/invoices/${Number(invoiceId)}/channels`),
         pay: (invoiceId, method) => request('POST', `office/invoices/${Number(invoiceId)}/pay`, { method }),

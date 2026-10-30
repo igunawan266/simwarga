@@ -3,9 +3,7 @@
 namespace Tests\Feature;
 
 use App\Database\Seeds\DatabaseSeeder;
-use App\Libraries\Payment\Tripay\HttpTransport;
 use App\Libraries\Payment\Tripay\TripayClient;
-use App\Libraries\Payment\Tripay\TripayException;
 use App\Services\Payment\ChannelService;
 use App\Services\ReservationService;
 use CodeIgniter\Test\CIUnitTestCase;
@@ -14,6 +12,7 @@ use CodeIgniter\Test\FeatureTestTrait;
 use CodeIgniter\Throttle\ThrottlerInterface;
 use Config\Database;
 use Config\Services;
+use Tests\Support\FakeTripay;
 
 /**
  * Tripay integration without network access: a fake transport plays Tripay's API, and
@@ -301,34 +300,5 @@ final class TripayPaymentTest extends CIUnitTestCase
 
         config('Tripay')->apiKey = '';
         $this->client($t['session'])->get("api/v1/office/invoices/{$t['invoice']['id']}/channels")->assertStatus(503);
-    }
-}
-
-/** Plays Tripay's API: canned responses per path, records every request. */
-final class FakeTripay implements HttpTransport
-{
-    public array $requests  = [];
-    public array $responses = [];
-    public array $fail      = [];
-
-    /** @var callable|null fn(array $form): array */
-    public $onCreate;
-
-    public function send(string $method, string $url, array $headers, array $query = [], array $form = []): array
-    {
-        $this->requests[] = compact('method', 'url', 'headers', 'query', 'form');
-        $path             = preg_replace('#^https://tripay\.co\.id/api(-sandbox)?/#', '', $url);
-
-        if (! empty($this->fail[$path])) {
-            throw new TripayException('Tidak dapat terhubung ke Tripay: timeout');
-        }
-        if ($path === 'transaction/create' && $this->onCreate) {
-            return ['status' => 200, 'body' => json_encode(['success' => true, 'data' => ($this->onCreate)($form)])];
-        }
-        if (! array_key_exists($path, $this->responses)) {
-            return ['status' => 404, 'body' => json_encode(['success' => false, 'message' => 'Not found'])];
-        }
-
-        return ['status' => 200, 'body' => json_encode(['success' => true, 'data' => $this->responses[$path]])];
     }
 }

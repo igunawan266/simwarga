@@ -137,6 +137,10 @@ class CoreSeeder extends Seeder
             ['general', 'default_currency', 'IDR', 'string'],
             ['billing', 'invoice_due_hours', '24', 'int'],
             ['billing', 'grace_period_days', '3', 'int'],
+            ['billing', 'renewal_days_before', '7', 'int'],
+            ['billing', 'seller_name', 'Virtual AI Office', 'string'],
+            ['billing', 'seller_address', '', 'string'],
+            ['billing', 'seller_email', '', 'string'],
         ];
         foreach ($settings as [$group, $key, $value, $type]) {
             $this->upsert('system_settings', ['setting_group' => $group, 'setting_key' => $key], [

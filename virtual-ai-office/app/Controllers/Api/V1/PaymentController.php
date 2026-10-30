@@ -4,7 +4,9 @@ namespace App\Controllers\Api\V1;
 
 use App\Exceptions\DomainRuleException;
 use App\Models\UserModel;
+use App\Services\InvoicePdfService;
 use App\Services\Payment\PaymentService;
+use App\Services\SubscriptionLifecycleService;
 use Config\Services;
 
 /** /api/v1/office/invoices/{id}/... — tenant owner/admin pays its own invoices. */
@@ -33,6 +35,32 @@ class PaymentController extends BaseApiController
             'email' => $tenant['contact_email'] ?: $user['email'],
             'phone' => $tenant['contact_phone'] ?? '',
         ])]);
+    }
+
+    /** GET office/invoices/{id}/pdf */
+    public function pdf(int $invoiceId)
+    {
+        try {
+            $invoice = $this->payments->invoiceForTenant($invoiceId);
+        } catch (DomainRuleException $e) {
+            return $this->domainError($e);
+        }
+
+        return $this->response
+            ->setContentType('application/pdf')
+            ->setHeader('Content-Disposition', 'attachment; filename="' . $invoice['invoice_number'] . '.pdf"')
+            ->setHeader('Cache-Control', 'private, no-store')
+            ->setBody((new InvoicePdfService())->render($invoice));
+    }
+
+    /** POST office/subscription/renew — returns the (new or open) renewal invoice. */
+    public function renew()
+    {
+        return $this->run(function () {
+            $invoice = (new SubscriptionLifecycleService())->requestRenewal(Services::tenantContext()->id());
+
+            return ['invoice' => ['id' => (int) $invoice['id'], 'number' => $invoice['invoice_number'], 'total' => (int) $invoice['total'], 'due_at' => $invoice['due_at']]];
+        });
     }
 
     public function status(int $invoiceId)

@@ -21,6 +21,20 @@ class PaymentChannelsController extends BaseApiController
         ]);
     }
 
+    /** Any tenant's invoice as PDF (Super Admin). */
+    public function invoicePdf(int $id)
+    {
+        $invoice = Database::connect()->table('invoices')->where('id', $id)->get()->getRowArray();
+        if ($invoice === null) {
+            return $this->failNotFound('Invoice tidak ditemukan.');
+        }
+
+        return $this->response->setContentType('application/pdf')
+            ->setHeader('Content-Disposition', 'attachment; filename="' . $invoice['invoice_number'] . '.pdf"')
+            ->setHeader('Cache-Control', 'private, no-store')
+            ->setBody((new \App\Services\InvoicePdfService())->render($invoice));
+    }
+
     public function sync()
     {
         if (! config('Tripay')->isConfigured()) {
