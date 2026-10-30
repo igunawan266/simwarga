@@ -24,6 +24,8 @@ class AgentsController extends BaseApiController
         'manager_agent_id'    => 'permit_empty|is_natural',
         'token_limit_monthly' => 'permit_empty|is_natural|less_than_equal_to[1000000000]',
         'effort'              => 'permit_empty|in_list[low,medium,high,xhigh,max]',
+        'knowledge_base_id'   => 'permit_empty|is_natural',
+        'tool_ids'            => 'permit_empty|regex_match[/^[0-9,]*$/]',
     ];
 
     private AgentService $agents;
@@ -60,7 +62,7 @@ class AgentsController extends BaseApiController
 
     public function create()
     {
-        $data  = $this->input([...AgentService::EDITABLE, 'effort']);
+        $data  = $this->input([...AgentService::EDITABLE, 'effort', 'tool_ids']);
         $rules = ['name' => 'required|string|min_length[2]|max_length[100]', 'job_title' => 'required|string|min_length[2]|max_length[100]',
             'department' => 'required|string|max_length[50]'] + self::AGENT_RULES;
         if ($fail = $this->invalid($data, $rules)) {
@@ -72,7 +74,7 @@ class AgentsController extends BaseApiController
 
     public function update(int $id)
     {
-        $data = $this->input([...AgentService::EDITABLE, 'effort']);
+        $data = $this->input([...AgentService::EDITABLE, 'effort', 'tool_ids']);
         if ($fail = $this->invalid($data, self::AGENT_RULES)) {
             return $fail;
         }

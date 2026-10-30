@@ -64,6 +64,16 @@ export const api = {
         create: (formData) => request('POST', 'office/knowledge', formData),
         remove: (id) => request('DELETE', `office/knowledge/${Number(id)}`),
     },
+    tools: {
+        list: () => request('GET', 'office/tools'),
+        create: (data) => request('POST', 'office/tools', data),
+        update: (id, data) => request('PATCH', `office/tools/${Number(id)}`, data),
+        remove: (id) => request('DELETE', `office/tools/${Number(id)}`),
+        test: (id, input) => request('POST', `office/tools/${Number(id)}/test`, { input }),
+        approvals: () => request('GET', 'office/approvals'),
+        approve: (callId, note) => request('POST', `office/tool-calls/${Number(callId)}/approve`, { note }),
+        reject: (callId, note) => request('POST', `office/tool-calls/${Number(callId)}/reject`, { note }),
+    },
     tasks: {
         list: (params = {}) => request('GET', `office/tasks?${new URLSearchParams(params)}`),
         get: (id) => request('GET', `office/tasks/${Number(id)}`),

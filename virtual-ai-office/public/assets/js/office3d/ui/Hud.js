@@ -26,7 +26,7 @@ export class Hud {
             const form = e.target.closest('form[data-form]');
             if (!form) return;
             e.preventDefault();
-            this.actions[`form:${form.dataset.form}`]?.(Object.fromEntries(new FormData(form)), form);
+            this.actions[`form:${form.dataset.form}`]?.(Object.fromEntries(new FormData(form)), form, e.submitter);
         });
         $('#login-form').addEventListener('submit', (e) => {
             e.preventDefault();
@@ -608,6 +608,7 @@ export function notificationsPanelHtml(items) {
                 <p>${esc(n.body)}</p>
                 <small>${esc(n.created_at)}</small>
                 ${n.data?.invoice_id ? '<button class="btn" data-action="billing">Lihat tagihan</button>' : ''}
+                ${n.data?.task_id ? `<button class="btn" data-action="task" data-task="${Number(n.data.task_id)}">Buka task</button>` : ''}
             </div>`).join('') || '<div class="empty">Belum ada notifikasi.</div>'}`;
 }
 
@@ -619,8 +620,9 @@ export function setUnread(count) {
 }
 
 // ---------------------------------------------------------------------- AI agents & tasks
-const TASK_COLORS = { queued: '#94a3b8', running: '#38bdf8', waiting: '#fbbf24', completed: '#34d399', failed: '#f87171', cancelled: '#64748b' };
-const TASK_LABEL = { queued: 'antre', running: 'dikerjakan', waiting: 'menunggu tim', completed: 'selesai', failed: 'gagal', cancelled: 'dibatalkan' };
+const TASK_COLORS = { queued: '#94a3b8', running: '#38bdf8', waiting: '#fbbf24', waiting_approval: '#f59e0b', completed: '#34d399', failed: '#f87171', cancelled: '#64748b' };
+const TASK_LABEL = { queued: 'antre', running: 'dikerjakan', waiting: 'menunggu tim', waiting_approval: 'menunggu persetujuan', completed: 'selesai', failed: 'gagal', cancelled: 'dibatalkan' };
+export const TASK_OPEN = ['queued', 'running', 'waiting', 'waiting_approval'];
 const taskPill = (s) => `<span class="status-pill" style="--c:${TASK_COLORS[s] || '#94a3b8'}">${esc(TASK_LABEL[s] || s)}</span>`;
 const fmtTokens = (n) => Number(n || 0).toLocaleString('id-ID');
 
@@ -659,7 +661,7 @@ export function agentPanelHtml(a, tasks, canManage) {
         ${tasks.map(taskRow).join('') || '<div class="empty">Belum ada task.</div>'}`;
 }
 
-export function agentFormHtml(agent, { rooms, models, agents, roomId, knowledge = [] }) {
+export function agentFormHtml(agent, { rooms, models, agents, roomId, knowledge = [], tools = [] }) {
     const v = agent ?? {};
     const room = agent ? agent.room_id : roomId;
     const opt = (value, label, selected) => `<option value="${esc(value)}" ${selected ? 'selected' : ''}>${esc(label)}</option>`;
@@ -680,6 +682,10 @@ export function agentFormHtml(agent, { rooms, models, agents, roomId, knowledge 
             </div>
             <label>Deskripsi pekerjaan<textarea name="job_description" rows="2" maxlength="2000">${esc(v.job_description ?? '')}</textarea></label>
             <label>System prompt<textarea name="system_prompt" rows="6" maxlength="20000" placeholder="Peran, tanggung jawab, gaya bahasa, batasan.">${esc(v.system_prompt ?? '')}</textarea></label>
+            ${tools.length ? `<fieldset class="tool-picks" data-tool-picks><legend>Tools yang boleh dipakai</legend>
+                ${tools.map((t) => `<label class="check"><input type="checkbox" value="${t.id}" ${(v.tool_ids || []).includes(t.id) ? 'checked' : ''} ${t.is_active ? '' : 'disabled'}>
+                    ${esc(t.name)} <small>${esc(t.method)} · ${t.approval_mode === 'auto' ? 'otomatis' : 'perlu persetujuan'}${t.is_active ? '' : ' · nonaktif'}</small></label>`).join('')}
+            </fieldset>` : ''}
             <p class="muted small">Agent baru dibuat dalam keadaan nonaktif. Effort lebih tinggi = jawaban lebih mendalam, token lebih banyak.</p>
             <div class="form-error" hidden></div>
             <button class="btn btn--primary" type="submit">${agent ? 'Simpan perubahan' : 'Buat agent'}</button>
@@ -708,10 +714,12 @@ export function taskPanelHtml(d) {
             ${t.sources.map((s) => `<blockquote class="source"><small>${esc(s.knowledge_base)} · bagian ${Number(s.chunk)}</small>“${esc(s.quote)}”</blockquote>`).join('')}` : ''}
         ${t.error_message ? `<div class="prototype-box"><b>${t.status === 'queued' ? 'AKAN DICOBA LAGI' : 'TIDAK SELESAI'}</b>${esc(t.error_message)}</div>` : ''}
         ${d.children.length ? `<div class="section-label">Didelegasikan ke tim (${d.children.length})</div>${d.children.map((c) => taskRow(c)).join('')}` : ''}
+        ${t.tool_calls?.length ? `<div class="section-label">Pemanggilan tool (${t.tool_calls.length})</div>${t.tool_calls.map(toolCallHtml).join('')}` : ''}
+        ${t.status === 'waiting_approval' ? '<button class="btn btn--primary btn--block" data-action="approvals">Tinjau persetujuan tool</button>' : ''}
         <div class="section-label">Riwayat eksekusi</div>
         <ol class="logs">${logs || '<li class="log">Belum ada aktivitas.</li>'}</ol>
-        ${['queued', 'waiting'].includes(t.status) ? `<button class="btn btn--danger btn--block" data-action="task-cancel" data-task="${t.id}">Batalkan task</button>` : ''}
-        ${['queued', 'running', 'waiting'].includes(t.status) ? '<p class="muted small">Diperbarui otomatis. Task diproses oleh worker <code>agents:work</code> di server.</p>' : ''}`;
+        ${['queued', 'waiting', 'waiting_approval'].includes(t.status) ? `<button class="btn btn--danger btn--block" data-action="task-cancel" data-task="${t.id}">Batalkan task</button>` : ''}
+        ${TASK_OPEN.includes(t.status) ? '<p class="muted small">Diperbarui otomatis. Task diproses oleh worker <code>agents:work</code> di server.</p>' : ''}`;
 }
 
 export function tasksPanelHtml(tasks) {
@@ -768,4 +776,118 @@ export function knowledgeDetailHtml(d) {
         <div class="section-label">Pratinjau (${d.preview.length} bagian pertama)</div>
         ${d.preview.map((c) => `<blockquote class="source"><small>bagian ${c.seq + 1}</small>${esc(c.text)}${c.text.length >= 600 ? '…' : ''}</blockquote>`).join('') || '<div class="empty">Tidak ada isi.</div>'}
         <button class="btn btn--block" data-action="knowledge">← Semua knowledge base</button>`;
+}
+
+// ---------------------------------------------------------------------- tools & approvals
+const CALL_COLORS = { pending_approval: '#f59e0b', approved: '#38bdf8', rejected: '#64748b', executed: '#34d399', failed: '#f87171' };
+const CALL_LABEL = { pending_approval: 'menunggu persetujuan', approved: 'disetujui', rejected: 'ditolak', executed: 'dijalankan', failed: 'gagal' };
+const prettyJson = (v) => esc(JSON.stringify(v ?? {}, null, 2));
+
+function toolCallHtml(c) {
+    return `<div class="kb-card">
+        <div class="kb-card__head"><b>${esc(c.tool_name)}</b><span class="status-pill" style="--c:${CALL_COLORS[c.status] || '#94a3b8'}">${esc(CALL_LABEL[c.status] || c.status)}</span></div>
+        <small>Putaran ${Number(c.round)}${c.http_status ? ` · HTTP ${Number(c.http_status)}` : ''}${c.duration_ms ? ` · ${Number(c.duration_ms)} ms` : ''}</small>
+        <pre class="code">${prettyJson(c.input_decoded)}</pre>
+        ${c.decision_note ? `<small>Catatan: ${esc(c.decision_note)}</small>` : ''}
+        ${c.result ? `<details><summary>Hasil</summary><pre class="code">${esc(c.result)}</pre></details>` : ''}
+    </div>`;
+}
+
+export function toolsPanelHtml(tools, planAllows) {
+    return `
+        <div class="eyebrow">Kantor Anda</div>
+        <h3>Tools &amp; Integrasi</h3>
+        <div class="muted">Endpoint HTTP milik perusahaan Anda (CRM, katalog, status pesanan) yang boleh dipanggil agent. Kunci API disimpan terenkripsi di server dan tidak pernah dikirim ke browser atau ke model AI. Mode <b>perlu persetujuan</b> menahan task sampai owner/admin menyetujui setiap panggilan.</div>
+        ${planAllows ? '' : '<div class="prototype-box"><b>PAKET</b>Integrasi API tidak termasuk dalam paket Anda. Upgrade paket untuk menambahkan tools.</div>'}
+        ${tools.map((t) => `
+            <div class="kb-card">
+                <div class="kb-card__head"><b>${esc(t.name)}</b><span class="status-pill" style="--c:${t.is_active ? '#34d399' : '#64748b'}">${t.is_active ? 'aktif' : 'nonaktif'}</span></div>
+                <small><code>${esc(t.method)} ${esc(t.url)}</code></small>
+                <small>${t.approval_mode === 'auto' ? 'Berjalan otomatis' : 'Perlu persetujuan'} · ${t.params.length} parameter${t.has_secret ? ` · header rahasia ${esc(t.secret_header_name)}` : ''}</small>
+                ${t.agents?.length ? `<small>Dipakai oleh: ${t.agents.map(esc).join(', ')}</small>` : '<small>Belum dipakai agent mana pun.</small>'}
+                <div class="btn-row">
+                    <button class="btn" data-action="tool-edit" data-tool="${t.id}">Edit &amp; uji</button>
+                    <button class="btn btn--danger" data-action="tool-delete" data-tool="${t.id}">Hapus</button>
+                </div>
+            </div>`).join('') || '<div class="empty">Belum ada tool.</div>'}
+        <div class="btn-row">
+            ${planAllows ? '<button class="btn btn--primary" data-action="tool-new">Tambah tool</button>' : ''}
+            <button class="btn" data-action="approvals">Persetujuan tertunda</button>
+        </div>`;
+}
+
+const PARAM_TYPES = ['string', 'integer', 'number', 'boolean'];
+
+export function toolParamRowHtml(p = {}) {
+    return `<div class="param-row" data-param>
+        <input data-p="name" placeholder="nama_param" pattern="[a-z][a-z0-9_]{0,63}" value="${esc(p.name ?? '')}" aria-label="Nama parameter">
+        <select data-p="type" aria-label="Tipe">${PARAM_TYPES.map((t) => `<option ${t === (p.type ?? 'string') ? 'selected' : ''}>${t}</option>`).join('')}</select>
+        <label class="check"><input type="checkbox" data-p="required" ${p.required ? 'checked' : ''}> wajib</label>
+        <input data-p="description" placeholder="Penjelasan untuk agent" maxlength="300" value="${esc(p.description ?? '')}" aria-label="Deskripsi">
+        <button type="button" class="btn btn--danger" data-action="tool-param-remove" aria-label="Hapus parameter">×</button>
+    </div>`;
+}
+
+export function toolFormHtml(tool) {
+    const v = tool ?? { method: 'GET', approval_mode: 'approval', is_active: true, params: [], headers: {} };
+    const headers = Object.keys(v.headers || {}).length ? JSON.stringify(v.headers) : '';
+    const sample = Object.fromEntries((v.params || []).map((p) => [p.name, p.type === 'string' ? '' : null]));
+    return `
+        <div class="eyebrow">${tool ? 'Edit tool' : 'Tool baru'}</div>
+        <h3>${tool ? esc(tool.name) : 'Tambah Tool HTTP'}</h3>
+        <form class="admin-form" data-form="tool" data-tool="${tool?.id ?? ''}">
+            <div class="grid-2">
+                <label>Nama<input name="name" required minlength="2" maxlength="100" value="${esc(v.name ?? '')}" placeholder="Cek status pesanan"></label>
+                <label>Mode<select name="approval_mode">
+                    <option value="approval" ${v.approval_mode === 'approval' ? 'selected' : ''}>Perlu persetujuan</option>
+                    <option value="auto" ${v.approval_mode === 'auto' ? 'selected' : ''}>Otomatis (hanya untuk endpoint baca)</option></select></label>
+                <label>Metode<select name="method">${['GET', 'POST', 'PUT', 'PATCH', 'DELETE'].map((m) => `<option ${m === v.method ? 'selected' : ''}>${m}</option>`).join('')}</select></label>
+                <label>Status<select name="is_active"><option value="1" ${v.is_active ? 'selected' : ''}>Aktif</option><option value="0" ${v.is_active ? '' : 'selected'}>Nonaktif</option></select></label>
+            </div>
+            <label>URL (https; parameter path ditulis {nama})<input name="url" required maxlength="500" value="${esc(v.url ?? '')}" placeholder="https://api.perusahaan.id/orders/{order_id}"></label>
+            <label>Deskripsi untuk agent<textarea name="description" rows="2" required minlength="10" maxlength="1000" placeholder="Kapan tool ini dipakai dan apa hasilnya.">${esc(v.description ?? '')}</textarea></label>
+            <div class="section-label">Parameter</div>
+            <div data-params>${(v.params || []).map(toolParamRowHtml).join('')}</div>
+            <button type="button" class="btn" data-action="tool-param-add">+ Parameter</button>
+            <p class="muted small">GET mengirim parameter sebagai query string; metode lain sebagai body JSON. Parameter yang tidak wajib boleh dikosongkan oleh agent.</p>
+            <div class="grid-2">
+                <label>Header rahasia (nama)<input name="secret_header_name" maxlength="64" pattern="[A-Za-z0-9\\-]{1,64}" value="${esc(v.secret_header_name ?? '')}" placeholder="X-Api-Key"></label>
+                <label>Nilai header rahasia<input name="secret_header_value" type="password" autocomplete="new-password" maxlength="2000" placeholder="${v.has_secret ? '•••••• tersimpan — isi untuk mengganti' : 'disimpan terenkripsi'}"></label>
+            </div>
+            <label>Header tambahan (JSON, opsional)<input name="headers" value="${esc(headers)}" placeholder='{"Accept":"application/json"}'></label>
+            <div class="form-error" hidden></div>
+            <button class="btn btn--primary" type="submit">${tool ? 'Simpan perubahan' : 'Simpan tool'}</button>
+        </form>
+        ${tool ? `<div class="section-label">Uji panggilan</div>
+        <form class="admin-form" data-form="tool-test" data-tool="${tool.id}">
+            <label>Input (JSON)<textarea name="input" rows="3" class="mono">${esc(JSON.stringify(sample))}</textarea></label>
+            <button class="btn" type="submit">Jalankan uji</button>
+            <div data-test-result></div>
+        </form>` : ''}
+        <button class="btn btn--block" data-action="tools">← Semua tools</button>`;
+}
+
+export function toolTestResultHtml(r) {
+    return `<div class="kb-card"><div class="kb-card__head"><b>HTTP ${Number(r.status)}</b><small>${Number(r.duration_ms)} ms</small></div><pre class="code">${esc(r.body)}</pre></div>`;
+}
+
+export function approvalsPanelHtml(items) {
+    return `
+        <div class="eyebrow">Kantor Anda</div>
+        <h3>Persetujuan Tool</h3>
+        <div class="muted">Agent menunggu izin sebelum memanggil sistem Anda. Periksa input yang akan dikirim. Task berlanjut setelah semua panggilannya diputuskan; penolakan dikirim ke agent beserta catatan Anda.</div>
+        ${items.map((c) => `
+            <div class="kb-card">
+                <div class="kb-card__head"><b>${esc(c.tool)}</b><small>${esc(c.created_at)}</small></div>
+                <small>${esc(c.agent_name ?? '-')} · task <button class="link" data-action="task" data-task="${c.task_id}">#${c.task_id} ${esc(c.task_title)}</button></small>
+                ${c.method ? `<small><code>${esc(c.method)} ${esc(c.url)}</code></small>` : ''}
+                <pre class="code">${prettyJson(c.input)}</pre>
+                <form class="admin-form" data-form="tool-decision" data-call="${c.id}">
+                    <input name="note" maxlength="500" placeholder="Catatan (opsional, dikirim ke agent bila ditolak)">
+                    <div class="btn-row">
+                        <button class="btn btn--primary" type="submit" data-decision="approve">Setujui</button>
+                        <button class="btn btn--danger" type="submit" data-decision="reject">Tolak</button>
+                    </div>
+                </form>
+            </div>`).join('') || '<div class="empty">Tidak ada panggilan tool yang menunggu persetujuan.</div>'}`;
 }

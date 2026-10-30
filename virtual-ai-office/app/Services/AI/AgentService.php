@@ -39,7 +39,7 @@ class AgentService
             ->join('rooms', 'rooms.id = ai_agents.room_id', 'left')
             ->find($agent['id']);
 
-        return $this->present($row, true) + ['team' => array_map(
+        return $this->present($row, true) + ['tool_ids' => (new ToolService())->toolIdsForAgent($agent['id']), 'team' => array_map(
             static fn ($t) => ['id' => (int) $t['id'], 'name' => $t['name'], 'job_title' => $t['job_title']],
             model(AiAgentModel::class)->where('manager_agent_id', $agent['id'])->where('is_active', 1)->findAll(),
         )];
@@ -60,6 +60,9 @@ class AgentService
         ];
         $row['ai_model_id'] ??= $this->defaultModelId();
         $id = model(AiAgentModel::class)->insert($row, true);
+        if (isset($data['tool_ids'])) {
+            (new ToolService())->setAgentTools($id, $this->ids($data['tool_ids']));
+        }
         $this->audit('agent.create', $id, null, $row);
 
         return $this->detail($id);
@@ -73,6 +76,9 @@ class AgentService
             $config            = json_decode($before['api_config'] ?? '{}', true) ?: [];
             $config['effort']  = $data['effort'];
             $changes['api_config'] = json_encode($config);
+        }
+        if (isset($data['tool_ids'])) {
+            (new ToolService())->setAgentTools($id, $this->ids($data['tool_ids']));
         }
         if ($changes !== []) {
             model(AiAgentModel::class)->update($id, $changes);
@@ -101,7 +107,7 @@ class AgentService
         $tenantId = Services::tenantContext()->id();
         $db       = Database::connect();
         $db->transException(true)->transStart();
-        $db->table('agent_tasks')->where('tenant_id', $tenantId)->where('agent_id', $id)->whereIn('status', ['queued', 'waiting'])
+        $db->table('agent_tasks')->where('tenant_id', $tenantId)->where('agent_id', $id)->whereIn('status', ['queued', 'waiting', 'waiting_approval'])
             ->update(['status' => 'cancelled', 'error_message' => 'Agent dihapus', 'updated_at' => date('Y-m-d H:i:s')]);
         $db->table('ai_agents')->where('tenant_id', $tenantId)->where('manager_agent_id', $id)->update(['manager_agent_id' => null]);
         model(AiAgentModel::class)->delete($id);
@@ -189,6 +195,14 @@ class AgentService
         }
 
         return false;
+    }
+
+    /** "1,2,3" or [1,2,3] → [1,2,3] */
+    private function ids(mixed $value): array
+    {
+        $list = is_array($value) ? $value : explode(',', (string) $value);
+
+        return array_values(array_filter(array_map('intval', $list)));
     }
 
     private function defaultModelId(): ?int

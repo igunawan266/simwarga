@@ -63,6 +63,9 @@ class AnthropicProvider implements LlmProvider
 
         try {
             $message = $this->client->beta->messages->create(...$params, betas: $betas ?: null);
+            // Thinking blocks (with signatures), tool_use and citations must be passed back
+            // verbatim on the next turn; json round-trip keeps the API's wire shape.
+            $raw = json_decode(json_encode($message->content), true) ?: [];
         } catch (RateLimitException $e) {
             throw new LlmException('Batas laju AI tercapai, akan dicoba lagi.', true, $e);
         } catch (InternalServerException $e) {
@@ -106,6 +109,8 @@ class AnthropicProvider implements LlmProvider
             model: (string) $message->model,
             refusalCategory: $message->stopReason === 'refusal' ? ($message->stopDetails->category ?? null) : null,
             citations: $citations,
+            rawContent: $raw,
+            sentMessages: $params['messages'],
         );
     }
 
@@ -116,8 +121,8 @@ class AnthropicProvider implements LlmProvider
      */
     private function withDocuments(array $messages, array $documents): array
     {
-        if ($documents === []) {
-            return $messages;
+        if ($documents === [] || ! is_string($messages[0]['content'] ?? null)) {
+            return $messages; // continuing a conversation: documents are already in its first turn
         }
         $blocks = [];
         foreach ($documents as $doc) {

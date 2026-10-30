@@ -49,7 +49,17 @@ Status: ✅ selesai · 🟡 fondasi tersedia · ⬜ belum
   prompt caching, KB besar hanya potongan paling relevan (TF-IDF). Sitasi dipetakan ke potongan dan
   ditampilkan sebagai **Sumber** pada hasil task. Isi dokumen diperlakukan sebagai data (bukan instruksi).
   Khusus Owner/Admin, terisolasi per tenant.
-- ⬜ 3.3 Tools & integrasi (HTTP/webhook tool per tenant, WhatsApp, CRM) + persetujuan manusia
+- ✅ **3.3 Tools & integrasi + persetujuan manusia** — Owner/Admin mendaftarkan *HTTP tool* per tenant
+  (metode, URL https dengan `{param}` path, parameter bertipe → skema JSON *strict*, header tambahan,
+  header rahasia **terenkripsi** dengan `encryption.key` — tidak pernah dikirim ke browser maupun model).
+  Tool dipilih per agent; fitur paket `api_integration` (Professional/Enterprise) ditegakkan di server.
+  Mode **perlu persetujuan** (default): task berhenti di status `waiting_approval`, Owner/Admin mendapat
+  notifikasi, meninjau input di panel **Persetujuan** lalu menyetujui/menolak (dengan catatan); task
+  dilanjutkan worker dengan `tool_result` (penolakan diteruskan ke agent). Mode **otomatis** untuk
+  endpoint baca. Proteksi SSRF (`UrlGuard`): hanya https, IP publik (DNS di-*pin*), port terbatas,
+  tanpa redirect, respons maks. 64 KB. Setiap panggilan tercatat di `tool_calls` (sekali eksekusi,
+  aman terhadap retry), batas putaran `ai.maxToolRounds`, audit log, uji panggilan dari UI.
+  WhatsApp/CRM spesifik dapat dibangun di atas HTTP tool ini.
 - ⬜ 3.4 Streaming progres task (SSE) & dashboard penggunaan AI
 
 ## PHASE 4 – Payment (Tripay) 🟡

@@ -5,7 +5,7 @@ import { api, ApiError } from './core/api.js';
 import { DIM, floorY, floorHeight } from './core/config.js';
 import { Building } from './building/Building.js';
 import { Elevator } from './building/Elevator.js';
-import { Hud, esc, knowledgePanelHtml, knowledgeDetailHtml, agentPanelHtml, agentFormHtml, taskPanelHtml, tasksPanelHtml, adminFloorHtml, plansPanelHtml, teamPanelHtml, registerPanelHtml, billingPanelHtml, channelsPanelHtml, paymentPanelHtml, notificationsPanelHtml, setUnread } from './ui/Hud.js';
+import { Hud, esc, TASK_OPEN, toolsPanelHtml, toolFormHtml, toolParamRowHtml, toolTestResultHtml, approvalsPanelHtml, knowledgePanelHtml, knowledgeDetailHtml, agentPanelHtml, agentFormHtml, taskPanelHtml, tasksPanelHtml, adminFloorHtml, plansPanelHtml, teamPanelHtml, registerPanelHtml, billingPanelHtml, channelsPanelHtml, paymentPanelHtml, notificationsPanelHtml, setUnread } from './ui/Hud.js';
 
 /**
  * Application controller / state machine.
@@ -57,6 +57,16 @@ class App {
             'kb-open': (d) => this.openKnowledgeBase(Number(d.kb)),
             'kb-delete': (d, el) => this.confirmTwice(el, () => this.agentAction(() => api.knowledge.remove(d.kb), 'Knowledge base dihapus.').then(() => this.openKnowledge())),
             'form:knowledge': (v, f) => this.saveKnowledge(f),
+            tools: () => this.openTools(),
+            'tool-new': () => this.openToolForm(null),
+            'tool-edit': (d) => this.openToolForm(Number(d.tool)),
+            'tool-delete': (d, el) => this.confirmTwice(el, () => this.agentAction(() => api.tools.remove(d.tool), 'Tool dihapus.').then(() => this.openTools())),
+            'tool-param-add': (d, el) => el.closest('form').querySelector('[data-params]').insertAdjacentHTML('beforeend', toolParamRowHtml()),
+            'tool-param-remove': (d, el) => el.closest('[data-param]').remove(),
+            'form:tool': (v, f) => this.saveTool(v, f),
+            'form:tool-test': (v, f) => this.testTool(v, f),
+            approvals: () => this.openApprovals(),
+            'form:tool-decision': (v, f, submitter) => this.decideToolCall(Number(f.dataset.call), submitter?.dataset.decision === 'approve', v.note, f),
             escape: () => this.escape(),
             // Super Admin
             'admin-plans': () => this.adminPlans(),
@@ -615,7 +625,9 @@ class App {
             const [{ models }, { agents }, detail, kb] = await Promise.all([
                 api.agents.models(), api.agents.list(), id ? api.agents.get(id) : Promise.resolve(null), api.knowledge.list(),
             ]);
-            this.hud.showPanel(agentFormHtml(detail?.agent ?? null, { rooms: this.office.rooms, models, agents, roomId, knowledge: kb.knowledge_bases }));
+            // Tools are an add-on (plan feature); the form simply omits the picker when unavailable.
+            const tools = this.canManage() ? await api.tools.list().then((r) => r.tools, () => []) : [];
+            this.hud.showPanel(agentFormHtml(detail?.agent ?? null, { rooms: this.office.rooms, models, agents, roomId, knowledge: kb.knowledge_bases, tools }));
             document.getElementById('info-panel').classList.add('info-panel--wide');
         } catch (e) {
             this.hud.toast(e.message, 'error');
@@ -627,6 +639,8 @@ class App {
         err.hidden = true;
         try {
             const id = form.dataset.agent;
+            const picks = form.querySelector('[data-tool-picks]');
+            if (picks) values.tool_ids = [...picks.querySelectorAll('input:checked')].map((i) => i.value).join(',');
             const { agent } = id ? await api.agents.update(id, values) : await api.agents.create(values);
             this.hud.toast(id ? 'Agent disimpan.' : 'Agent dibuat. Aktifkan agar bisa menerima tugas.');
             await this.reloadOffice();
@@ -668,7 +682,7 @@ class App {
             const detail = await api.tasks.get(id);
             this.hud.showPanel(taskPanelHtml(detail));
             document.getElementById('info-panel').classList.add('info-panel--wide');
-            if (['queued', 'running', 'waiting'].includes(detail.task.status)) {
+            if (TASK_OPEN.includes(detail.task.status)) {
                 // Refresh while the task is open and still moving.
                 this.taskPoll = setTimeout(() => document.getElementById('task-status') && this.openTask(id), 5000);
             }
@@ -716,6 +730,86 @@ class App {
             err.hidden = false;
             btn.disabled = false;
             btn.textContent = 'Simpan & proses';
+        }
+    }
+
+    async openTools() {
+        try {
+            const { tools, plan_allows: planAllows } = await api.tools.list();
+            this.hud.showPanel(toolsPanelHtml(tools, planAllows));
+            document.getElementById('info-panel').classList.add('info-panel--wide');
+        } catch (e) {
+            this.hud.toast(e.message, 'error');
+        }
+    }
+
+    async openToolForm(id) {
+        try {
+            const tool = id ? (await api.tools.list()).tools.find((t) => t.id === id) : null;
+            if (id && !tool) throw new Error('Tool tidak ditemukan.');
+            this.hud.showPanel(toolFormHtml(tool));
+            document.getElementById('info-panel').classList.add('info-panel--wide');
+        } catch (e) {
+            this.hud.toast(e.message, 'error');
+        }
+    }
+
+    async saveTool(values, form) {
+        const err = form.querySelector('.form-error');
+        err.hidden = true;
+        values.params = JSON.stringify([...form.querySelectorAll('[data-param]')].map((row) => ({
+            name: row.querySelector('[data-p=name]').value.trim(),
+            type: row.querySelector('[data-p=type]').value,
+            required: row.querySelector('[data-p=required]').checked,
+            description: row.querySelector('[data-p=description]').value.trim(),
+        })).filter((p) => p.name));
+        if (!values.secret_header_value) delete values.secret_header_value; // keep the stored secret
+        try {
+            const id = form.dataset.tool;
+            const { tool } = id ? await api.tools.update(id, values) : await api.tools.create(values);
+            this.hud.toast(id ? 'Tool disimpan.' : 'Tool dibuat. Hubungkan ke agent lewat form Edit agent.');
+            this.openToolForm(tool.id);
+        } catch (e) {
+            err.textContent = e.message;
+            err.hidden = false;
+        }
+    }
+
+    async testTool(values, form) {
+        const out = form.querySelector('[data-test-result]');
+        const btn = form.querySelector('button[type=submit]');
+        btn.disabled = true;
+        try {
+            JSON.parse(values.input || '{}');
+            const { result } = await api.tools.test(form.dataset.tool, values.input || '{}');
+            out.innerHTML = toolTestResultHtml(result);
+        } catch (e) {
+            out.innerHTML = `<div class="form-error">${esc(e instanceof SyntaxError ? 'Input bukan JSON yang valid.' : e.message)}</div>`;
+        } finally {
+            btn.disabled = false;
+        }
+    }
+
+    async openApprovals() {
+        this.stopTaskPolling();
+        try {
+            const { approvals } = await api.tools.approvals();
+            this.hud.showPanel(approvalsPanelHtml(approvals));
+            document.getElementById('info-panel').classList.add('info-panel--wide');
+        } catch (e) {
+            this.hud.toast(e.message, 'error');
+        }
+    }
+
+    async decideToolCall(callId, approve, note, form) {
+        form.querySelectorAll('button').forEach((b) => { b.disabled = true; });
+        try {
+            const res = approve ? await api.tools.approve(callId, note) : await api.tools.reject(callId, note);
+            this.hud.toast(res?.task_resumed ? 'Keputusan disimpan. Task dilanjutkan oleh agent.' : (approve ? 'Panggilan disetujui.' : 'Panggilan ditolak.'));
+            this.openApprovals();
+        } catch (e) {
+            this.hud.toast(e.message, 'error', 5000);
+            form.querySelectorAll('button').forEach((b) => { b.disabled = false; });
         }
     }
 

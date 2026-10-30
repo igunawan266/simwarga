@@ -64,6 +64,8 @@
             <button class="btn" data-action="tasks">Task</button>
             <button class="btn" data-action="team">Tim &amp; Akses</button>
             <button class="btn" data-action="knowledge" data-owner-only>Knowledge</button>
+            <button class="btn" data-action="tools" data-owner-only>Tools</button>
+            <button class="btn" data-action="approvals" data-owner-only>Persetujuan</button>
         </div>
     </section>
 

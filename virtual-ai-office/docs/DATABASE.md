@@ -1,6 +1,6 @@
 # Skema Database — Virtual AI Office
 
-28 tabel, MySQL 8 / MariaDB 10.6+ (InnoDB, utf8mb4). Migrasi juga berjalan di SQLite
+29 tabel, MySQL 8 / MariaDB 10.6+ (InnoDB, utf8mb4). Migrasi juga berjalan di SQLite
 untuk test. Semua uang disimpan sebagai **BIGINT Rupiah utuh** (Tripay memakai integer IDR).
 Kolom JSON memakai tipe `JSON` di MySQL dan `TEXT` di SQLite.
 
@@ -96,6 +96,15 @@ erDiagram
 
 `knowledge_bases` (`000010`): `original_filename`, `mime_type`, `size_bytes`, `char_count`, `error_message`.
 `agent_tasks.sources` (`000010`): kutipan knowledge base yang dipakai hasil task (JSON).
+
+### Tools (`000011`)
+| Tabel | Catatan |
+|---|---|
+| `tool_calls` | satu baris per `tool_use` dari model: `task_id`, `round`, `tool_use_id` (unik per task), `input` JSON, status `pending_approval → approved/rejected → executed/failed`, hasil, `http_status`, durasi, keputusan (`decided_by_user_id`, `decision_note`) |
+
+`ai_tools.approval_mode` (`approval`/`auto`); `ai_tools.config` menyimpan metode, URL, header dan header
+rahasia terenkripsi. `agent_tasks.state` (`000011`): status percakapan internal untuk melanjutkan task
+setelah persetujuan (tidak dikirim ke browser); `agent_tasks.tool_rounds`.
 
 ### Notifikasi (`000009`)
 | Tabel | Catatan |

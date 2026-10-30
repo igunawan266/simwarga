@@ -21,8 +21,20 @@ final class FakeLlm implements LlmProvider
     public function complete(array $request): LlmResponse
     {
         $this->requests[] = $request;
+        $r = ($this->respond)($request, count($this->requests) - 1);
 
-        return ($this->respond)($request, count($this->requests) - 1);
+        // Mirror the real provider: raw assistant content + the messages that were sent.
+        $raw = $r->rawContent ?: array_values(array_filter([
+            $r->text !== '' ? ['type' => 'text', 'text' => $r->text] : null,
+            ...array_map(static fn ($c) => ['type' => 'tool_use', 'id' => $c['id'], 'name' => $c['name'], 'input' => $c['input']], $r->toolCalls),
+        ]));
+
+        return new LlmResponse($r->text, $r->toolCalls, $r->stopReason, $r->inputTokens, $r->outputTokens, $r->model, $r->refusalCategory, $r->citations, $raw, $request['messages']);
+    }
+
+    public static function tool(string $name, array $input, string $id = 'toolu_x', string $text = ''): LlmResponse
+    {
+        return new LlmResponse($text, [['id' => $id, 'name' => $name, 'input' => $input]], 'tool_use', 200, 40, 'claude-opus-5-5');
     }
 
     public static function text(string $text, string $stop = 'end_turn', int $in = 120, int $out = 80): LlmResponse

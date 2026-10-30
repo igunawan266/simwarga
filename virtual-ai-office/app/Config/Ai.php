@@ -28,6 +28,17 @@ class Ai extends BaseConfig
     /** Server-side refusal fallback (beta) for models that support it. */
     public bool $refusalFallback = true;
 
+    /** Max tool round-trips per task before it is stopped. */
+    public int $maxToolRounds = 8;
+
+    /** Development only: let HTTP tools reach http:// and private addresses (local mocks). Ignored in production. */
+    public bool $toolsAllowPrivateNetwork = false;
+
+    public function allowPrivateToolTargets(): bool
+    {
+        return $this->toolsAllowPrivateNetwork && ENVIRONMENT !== 'production';
+    }
+
     /** Local mock of the Messages API for development/E2E tests. Ignored in production. */
     public string $baseUrlOverride = '';
 

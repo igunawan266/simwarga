@@ -59,7 +59,7 @@ class NotificationService
         $q = Database::connect()->table('tenant_members m')->select('u.email')
             ->join('users u', 'u.id = m.user_id')->join('roles r', 'r.id = m.role_id')
             ->where('m.tenant_id', $tenantId)->where('m.status', 'active')->where('u.status', 'active');
-        if ($audience === 'billing') {
+        if ($audience !== 'all') { // billing / managers: owners & admins only
             $q->whereIn('r.slug', self::BILLING_ROLES);
         }
         foreach (array_column($q->get()->getResultArray(), 'email') as $to) {

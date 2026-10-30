@@ -108,6 +108,10 @@ Data demo memakai langganan **trial**; tidak ada invoice atau pembayaran palsu y
     **Task** di HUD kantor menampilkan Task Monitoring. (Butuh `ai.anthropicApiKey` + `php spark agents:work`.)
 11. **Knowledge** di HUD kantor → unggah SOP/FAQ (PDF, Word, teks) → hubungkan ke agent lewat Edit agent →
     hasil task menampilkan **Sumber** berupa kutipan dokumen yang dipakai.
+12. **Tools** di HUD kantor (paket Professional/Enterprise) → daftarkan endpoint HTTP perusahaan (mis.
+    `https://api.perusahaan.id/orders/{order_id}` + header `X-Api-Key`), uji panggilan, lalu centang tool
+    di Edit agent. Saat agent ingin memanggilnya, task menunggu di **Persetujuan** sampai Anda
+    menyetujui/menolak. (Header rahasia butuh `encryption.key` — `php spark key:generate`.)
 
 Tombol fitur fase berikutnya ditampilkan non-aktif dengan label **PHASE n / PROTOTYPE**.
 
@@ -157,6 +161,10 @@ update `tenant_id`, delete lintas tenant).
 | GET | `/api/v1/office/agents/live` · `/ai-models` | anggota — status live untuk 3D, katalog model |
 | GET / POST | `/api/v1/office/knowledge` | owner/admin — daftar / buat KB (multipart `file` atau `text`) |
 | GET / DELETE | `/api/v1/office/knowledge/{id}` | owner/admin — pratinjau / hapus KB |
+| GET / POST | `/api/v1/office/tools` | owner/admin — daftar / buat HTTP tool (`params` JSON, `secret_header_*`, `approval_mode`) |
+| PATCH / DELETE | `/api/v1/office/tools/{id}` · POST `/tools/{id}/test` | owner/admin — ubah / hapus / uji panggilan (`input` JSON) |
+| GET | `/api/v1/office/approvals` | owner/admin — panggilan tool yang menunggu persetujuan |
+| POST | `/api/v1/office/tool-calls/{id}/approve` · `/reject` | owner/admin — putuskan (`note` opsional) |
 | GET | `/api/v1/office/members` | auth + tenant — daftar anggota |
 | POST | `/api/v1/office/members` | owner/admin — undang (`email`, `role`) → `invite_url` |
 | PATCH / DELETE | `/api/v1/office/members/{id}` | owner/admin — ubah peran/status, hapus |

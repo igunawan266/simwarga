@@ -83,7 +83,7 @@ class OfficeService
             'stats' => [
                 'agents_total' => count($agents),
                 'by_status'    => $status,
-                'tasks_open'   => model(AgentTaskModel::class)->whereIn('status', ['queued', 'running', 'waiting'])->countAllResults(),
+                'tasks_open'   => model(AgentTaskModel::class)->whereIn('status', ['queued', 'running', 'waiting', 'waiting_approval'])->countAllResults(),
             ],
         ];
     }

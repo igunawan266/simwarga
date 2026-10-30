@@ -38,6 +38,16 @@ $routes->group('api/v1', ['namespace' => 'App\Controllers\Api\V1', 'filter' => '
         $routes->get('tasks', 'AgentsController::tasks');
         $routes->get('tasks/(:num)', 'AgentsController::task/$1');
         $routes->post('tasks/(:num)/cancel', 'AgentsController::cancel/$1');
+        $routes->group('', ['filter' => 'role:tenant_owner,tenant_admin'], static function (RouteCollection $routes) {
+            $routes->get('tools', 'ToolsController::index');
+            $routes->post('tools', 'ToolsController::create');
+            $routes->patch('tools/(:num)', 'ToolsController::update/$1');
+            $routes->delete('tools/(:num)', 'ToolsController::delete/$1');
+            $routes->post('tools/(:num)/test', 'ToolsController::test/$1');
+            $routes->get('approvals', 'ToolsController::approvals');
+            $routes->post('tool-calls/(:num)/approve', 'ToolsController::approve/$1');
+            $routes->post('tool-calls/(:num)/reject', 'ToolsController::reject/$1');
+        });
         $routes->group('knowledge', ['filter' => 'role:tenant_owner,tenant_admin'], static function (RouteCollection $routes) {
             $routes->get('/', 'KnowledgeController::index');
             $routes->post('/', 'KnowledgeController::create');

@@ -78,6 +78,11 @@ class TaskService
             ->orderBy('c.id')->get()->getResultArray();
 
         $task['sources'] = json_decode($task['sources'] ?? 'null', true) ?: [];
+        unset($task['state']); // internal conversation state (may hold document text) is not sent to the browser
+        $toolCalls = array_map(static fn ($c) => $c + ['input_decoded' => json_decode($c['input'] ?? '{}', true)],
+            model(\App\Models\ToolCallModel::class)->select('id, round, tool_name, input, status, result, is_error, http_status, duration_ms, decision_note, decided_at, executed_at')
+                ->where('task_id', $id)->orderBy('id')->findAll());
+        $task['tool_calls'] = $toolCalls;
 
         return ['task' => $task, 'children' => $children, 'logs' => $logs, 'conversation' => $conversation];
     }
@@ -85,11 +90,11 @@ class TaskService
     public function cancel(int $id): array
     {
         $task = model(AgentTaskModel::class)->find($id) ?? throw new DomainRuleException('Task tidak ditemukan.', 404);
-        if (! in_array($task['status'], ['queued', 'waiting'], true)) {
+        if (! in_array($task['status'], ['queued', 'waiting', 'waiting_approval'], true)) {
             throw new DomainRuleException('Hanya task yang menunggu yang bisa dibatalkan.');
         }
         $now = date('Y-m-d H:i:s');
-        model(AgentTaskModel::class)->whereIn('status', ['queued', 'waiting'])
+        model(AgentTaskModel::class)->whereIn('status', ['queued', 'waiting', 'waiting_approval'])
             ->groupStart()->where('id', $id)->orWhere('parent_task_id', $id)->groupEnd()
             ->set(['status' => 'cancelled', 'error_message' => 'Dibatalkan oleh pengguna', 'completed_at' => $now])->update();
         Services::auditLogger()->record('task.cancel', ['entity_type' => 'agent_task', 'entity_id' => $id]);
@@ -101,7 +106,7 @@ class TaskService
     public function liveStatus(): array
     {
         $agents  = model(AiAgentModel::class)->select('id, status, room_id')->findAll();
-        $running = model(AgentTaskModel::class)->select('agent_id, title')->whereIn('status', ['running', 'waiting'])->findAll();
+        $running = model(AgentTaskModel::class)->select('agent_id, title')->whereIn('status', ['running', 'waiting', 'waiting_approval'])->findAll();
         $current = array_column($running, 'title', 'agent_id');
 
         return array_map(static fn ($a) => [
