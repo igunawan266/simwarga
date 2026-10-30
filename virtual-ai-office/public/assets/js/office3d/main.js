@@ -5,7 +5,7 @@ import { api, ApiError } from './core/api.js';
 import { DIM, floorY, floorHeight } from './core/config.js';
 import { Building } from './building/Building.js';
 import { Elevator } from './building/Elevator.js';
-import { Hud, esc, agentPanelHtml, agentFormHtml, taskPanelHtml, tasksPanelHtml, adminFloorHtml, plansPanelHtml, teamPanelHtml, registerPanelHtml, billingPanelHtml, channelsPanelHtml, paymentPanelHtml, notificationsPanelHtml, setUnread } from './ui/Hud.js';
+import { Hud, esc, knowledgePanelHtml, knowledgeDetailHtml, agentPanelHtml, agentFormHtml, taskPanelHtml, tasksPanelHtml, adminFloorHtml, plansPanelHtml, teamPanelHtml, registerPanelHtml, billingPanelHtml, channelsPanelHtml, paymentPanelHtml, notificationsPanelHtml, setUnread } from './ui/Hud.js';
 
 /**
  * Application controller / state machine.
@@ -53,6 +53,10 @@ class App {
             task: (d) => this.openTask(Number(d.task)),
             'task-cancel': (d) => this.agentAction(() => api.tasks.cancel(d.task), 'Task dibatalkan.').then(() => this.openTask(Number(d.task))),
             tasks: () => this.openTasks(),
+            knowledge: () => this.openKnowledge(),
+            'kb-open': (d) => this.openKnowledgeBase(Number(d.kb)),
+            'kb-delete': (d, el) => this.confirmTwice(el, () => this.agentAction(() => api.knowledge.remove(d.kb), 'Knowledge base dihapus.').then(() => this.openKnowledge())),
+            'form:knowledge': (v, f) => this.saveKnowledge(f),
             escape: () => this.escape(),
             // Super Admin
             'admin-plans': () => this.adminPlans(),
@@ -608,10 +612,10 @@ class App {
 
     async openAgentForm(id, roomId = null) {
         try {
-            const [{ models }, { agents }, detail] = await Promise.all([
-                api.agents.models(), api.agents.list(), id ? api.agents.get(id) : Promise.resolve(null),
+            const [{ models }, { agents }, detail, kb] = await Promise.all([
+                api.agents.models(), api.agents.list(), id ? api.agents.get(id) : Promise.resolve(null), api.knowledge.list(),
             ]);
-            this.hud.showPanel(agentFormHtml(detail?.agent ?? null, { rooms: this.office.rooms, models, agents, roomId }));
+            this.hud.showPanel(agentFormHtml(detail?.agent ?? null, { rooms: this.office.rooms, models, agents, roomId, knowledge: kb.knowledge_bases }));
             document.getElementById('info-panel').classList.add('info-panel--wide');
         } catch (e) {
             this.hud.toast(e.message, 'error');
@@ -675,6 +679,44 @@ class App {
 
     stopTaskPolling() {
         clearTimeout(this.taskPoll);
+    }
+
+    async openKnowledge() {
+        try {
+            const { knowledge_bases: list } = await api.knowledge.list();
+            this.hud.showPanel(knowledgePanelHtml(list));
+            document.getElementById('info-panel').classList.add('info-panel--wide');
+        } catch (e) {
+            this.hud.toast(e.message, 'error');
+        }
+    }
+
+    async openKnowledgeBase(id) {
+        try {
+            this.hud.showPanel(knowledgeDetailHtml(await api.knowledge.get(id)));
+        } catch (e) {
+            this.hud.toast(e.message, 'error');
+        }
+    }
+
+    async saveKnowledge(form) {
+        const err = form.querySelector('.form-error');
+        const btn = form.querySelector('button[type=submit]');
+        err.hidden = true;
+        btn.disabled = true;
+        btn.textContent = 'Memproses dokumen…';
+        const data = new FormData(form);
+        if (!data.get('file')?.size) data.delete('file');
+        try {
+            const { knowledge_base: kb } = await api.knowledge.create(data);
+            this.hud.toast(kb.status === 'ready' ? `"${kb.name}" siap dipakai (${kb.chunk_count} bagian).` : `"${kb.name}" gagal diproses: ${kb.error_message}`, kb.status === 'ready' ? 'info' : 'error', 5000);
+            this.openKnowledge();
+        } catch (e) {
+            err.textContent = e.message;
+            err.hidden = false;
+            btn.disabled = false;
+            btn.textContent = 'Simpan & proses';
+        }
     }
 
     async openTasks() {

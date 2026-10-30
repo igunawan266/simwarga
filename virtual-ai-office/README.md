@@ -106,6 +106,8 @@ Data demo memakai langganan **trial**; tidak ada invoice atau pembayaran palsu y
 10. Di ruangan mana pun, klik agent → **Edit** / **Aktifkan** / **Beri tugas**. Beri tugas ke **Atlas
     (AI Manager)** di CEO Office: ia membagi pekerjaan ke timnya lalu menyusun laporan akhir. Tombol
     **Task** di HUD kantor menampilkan Task Monitoring. (Butuh `ai.anthropicApiKey` + `php spark agents:work`.)
+11. **Knowledge** di HUD kantor → unggah SOP/FAQ (PDF, Word, teks) → hubungkan ke agent lewat Edit agent →
+    hasil task menampilkan **Sumber** berupa kutipan dokumen yang dipakai.
 
 Tombol fitur fase berikutnya ditampilkan non-aktif dengan label **PHASE n / PROTOTYPE**.
 
@@ -122,7 +124,7 @@ update `tenant_id`, delete lintas tenant).
 ## Dokumentasi
 
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — arsitektur, struktur folder, multi-tenancy, keamanan, 3D
-- [docs/DATABASE.md](docs/DATABASE.md) — skema 27 tabel + ERD
+- [docs/DATABASE.md](docs/DATABASE.md) — skema 28 tabel + ERD
 - [docs/ROADMAP.md](docs/ROADMAP.md) — status per phase
 
 ## API (v1)
@@ -153,6 +155,8 @@ update `tenant_id`, delete lintas tenant).
 | POST | `/api/v1/office/agents/{id}/tasks` | anggota — beri tugas (`title`, `instruction`, `priority`) |
 | GET | `/api/v1/office/tasks[/{id}]` · POST `/tasks/{id}/cancel` | anggota — monitoring, detail (sub-tugas, log, percakapan) |
 | GET | `/api/v1/office/agents/live` · `/ai-models` | anggota — status live untuk 3D, katalog model |
+| GET / POST | `/api/v1/office/knowledge` | owner/admin — daftar / buat KB (multipart `file` atau `text`) |
+| GET / DELETE | `/api/v1/office/knowledge/{id}` | owner/admin — pratinjau / hapus KB |
 | GET | `/api/v1/office/members` | auth + tenant — daftar anggota |
 | POST | `/api/v1/office/members` | owner/admin — undang (`email`, `role`) → `invite_url` |
 | PATCH / DELETE | `/api/v1/office/members/{id}` | owner/admin — ubah peran/status, hapus |

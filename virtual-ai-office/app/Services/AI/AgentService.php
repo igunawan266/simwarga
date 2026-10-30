@@ -16,7 +16,7 @@ use Config\Services;
 class AgentService
 {
     public const EFFORTS  = ['low', 'medium', 'high', 'xhigh', 'max'];
-    public const EDITABLE = ['name', 'job_title', 'department', 'job_description', 'system_prompt', 'room_id', 'ai_model_id', 'manager_agent_id', 'token_limit_monthly', 'avatar'];
+    public const EDITABLE = ['name', 'job_title', 'department', 'job_description', 'system_prompt', 'room_id', 'ai_model_id', 'manager_agent_id', 'token_limit_monthly', 'avatar', 'knowledge_base_id'];
 
     public function list(): array
     {
@@ -140,7 +140,7 @@ class AgentService
     private function validated(array $data, ?array $before): array
     {
         $row = array_intersect_key($data, array_flip(self::EDITABLE));
-        foreach (['room_id', 'ai_model_id', 'manager_agent_id'] as $fk) {
+        foreach (['room_id', 'ai_model_id', 'manager_agent_id', 'knowledge_base_id'] as $fk) {
             if (array_key_exists($fk, $row)) {
                 $row[$fk] = $row[$fk] === '' || $row[$fk] === null ? null : (int) $row[$fk];
             }
@@ -165,6 +165,9 @@ class AgentService
             if ($before !== null && $this->isAncestor((int) $before['id'], (int) $row['manager_agent_id'])) {
                 throw new DomainRuleException('Struktur manager melingkar tidak diizinkan.');
             }
+        }
+        if (! empty($row['knowledge_base_id'])) {
+            (new KnowledgeService())->find((int) $row['knowledge_base_id']); // tenant scoped: 404 for other tenants
         }
         if (array_key_exists('token_limit_monthly', $row)) {
             $row['token_limit_monthly'] = max(0, (int) $row['token_limit_monthly']);
@@ -207,6 +210,7 @@ class AgentService
             'room_id'          => $a['room_id'] === null ? null : (int) $a['room_id'],
             'room_name'        => $a['room_name'] ?? null,
             'manager_agent_id' => $a['manager_agent_id'] === null ? null : (int) $a['manager_agent_id'],
+            'knowledge_base_id' => $a['knowledge_base_id'] === null ? null : (int) $a['knowledge_base_id'],
             'model'            => ['id' => $a['ai_model_id'] === null ? null : (int) $a['ai_model_id'], 'name' => $a['model_name'] ?? null, 'key' => $a['model_key'] ?? null],
             'status'           => $a['status'],
             'is_active'        => (bool) $a['is_active'],

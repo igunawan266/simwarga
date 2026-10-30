@@ -48,7 +48,7 @@ class AnthropicProvider implements LlmProvider
             'model'        => $request['model'],
             'maxTokens'    => $request['max_tokens'] ?? $this->config->maxTokens,
             'system'       => $request['system'],
-            'messages'     => $request['messages'],
+            'messages'     => $this->withDocuments($request['messages'], $request['documents'] ?? []),
             'outputConfig' => ['effort' => $request['effort'] ?? 'medium'],
         ];
         if (! empty($request['tools'])) {
@@ -79,11 +79,18 @@ class AnthropicProvider implements LlmProvider
             throw new LlmException('Tidak dapat terhubung ke AI API, akan dicoba lagi.', true, $e);
         }
 
-        $text  = '';
-        $calls = [];
+        $text      = '';
+        $calls     = [];
+        $citations = [];
         foreach ($message->content as $block) {
             if ($block->type === 'text') {
                 $text .= $block->text;
+                foreach ($block->citations ?? [] as $c) {
+                    if ($c->type === 'content_block_location') {
+                        $citations[] = ['document_index' => $c->documentIndex, 'start_block_index' => $c->startBlockIndex,
+                            'end_block_index' => $c->endBlockIndex, 'cited_text' => $c->citedText];
+                    }
+                }
             } elseif ($block->type === 'tool_use') {
                 // input arrives parsed; never string-match the serialized JSON
                 $calls[] = ['id' => $block->id, 'name' => $block->name, 'input' => (array) $block->input];
@@ -98,6 +105,39 @@ class AnthropicProvider implements LlmProvider
             outputTokens: (int) $message->usage->outputTokens,
             model: (string) $message->model,
             refusalCategory: $message->stopReason === 'refusal' ? ($message->stopDetails->category ?? null) : null,
+            citations: $citations,
         );
+    }
+
+    /**
+     * Knowledge documents go first in the first user turn as custom-content documents: one
+     * text block per chunk, so a citation's block index maps straight back to a chunk.
+     * A stable, cacheable document gets a cache breakpoint (whole small knowledge bases).
+     */
+    private function withDocuments(array $messages, array $documents): array
+    {
+        if ($documents === []) {
+            return $messages;
+        }
+        $blocks = [];
+        foreach ($documents as $doc) {
+            $block = [
+                'type'      => 'document',
+                'source'    => ['type' => 'content', 'content' => array_map(static fn ($t) => ['type' => 'text', 'text' => $t], $doc['chunks'])],
+                'title'     => $doc['title'],
+                'citations' => ['enabled' => true],
+            ];
+            if (! empty($doc['context'])) {
+                $block['context'] = $doc['context'];
+            }
+            if (! empty($doc['cache'])) {
+                $block['cacheControl'] = ['type' => 'ephemeral'];
+            }
+            $blocks[] = $block;
+        }
+        $first             = $messages[0];
+        $messages[0]       = ['role' => $first['role'], 'content' => [...$blocks, ['type' => 'text', 'text' => $first['content']]]];
+
+        return $messages;
     }
 }

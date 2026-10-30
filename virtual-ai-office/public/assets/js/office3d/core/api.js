@@ -17,7 +17,8 @@ async function request(method, path, body) {
     let payload;
     if (method !== 'GET') {
         headers[csrfHeader] = csrfToken;
-        payload = new URLSearchParams(body || {});
+        // FormData (file uploads) is sent as multipart; everything else as a urlencoded form.
+        payload = body instanceof FormData ? body : new URLSearchParams(body || {});
     }
     const res = await fetch(`${base}/api/v1/${path}`, { method, headers, body: payload, credentials: 'same-origin' });
     let json = null;
@@ -56,6 +57,12 @@ export const api = {
         activate: (id) => request('POST', `office/agents/${Number(id)}/activate`),
         deactivate: (id) => request('POST', `office/agents/${Number(id)}/deactivate`),
         assign: (id, data) => request('POST', `office/agents/${Number(id)}/tasks`, data),
+    },
+    knowledge: {
+        list: () => request('GET', 'office/knowledge'),
+        get: (id) => request('GET', `office/knowledge/${Number(id)}`),
+        create: (formData) => request('POST', 'office/knowledge', formData),
+        remove: (id) => request('DELETE', `office/knowledge/${Number(id)}`),
     },
     tasks: {
         list: (params = {}) => request('GET', `office/tasks?${new URLSearchParams(params)}`),

@@ -63,6 +63,7 @@
         <div class="btn-row office-hud__team">
             <button class="btn" data-action="tasks">Task</button>
             <button class="btn" data-action="team">Tim &amp; Akses</button>
+            <button class="btn" data-action="knowledge" data-owner-only>Knowledge</button>
         </div>
     </section>
 

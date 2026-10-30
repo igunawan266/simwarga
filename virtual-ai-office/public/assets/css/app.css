@@ -356,3 +356,15 @@ a.btn--primary { color: #04101f; }
 .log--warning { border-color: #fbbf24; }
 .log--error { border-color: #f87171; }
 .admin-form textarea { resize: vertical; font-family: inherit; }
+
+/* ---------- Knowledge base ---------- */
+.kb-card { display: grid; gap: 4px; padding: 12px; border-radius: 12px; background: rgba(255,255,255,.035); border: 1px solid var(--line); margin-bottom: 8px; font-size: 13px; }
+.kb-card__head { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.kb-card small { color: var(--muted); font-size: 11px; }
+.kb-card .kb-error { color: #fca5a5; }
+.kb-card .btn-row { margin: 6px 0 0; }
+.kb-card .btn { padding: 6px 10px; font-size: 12px; }
+.source { margin: 0 0 8px; padding: 8px 12px; border-left: 3px solid var(--cyan); background: rgba(34,211,238,.06); border-radius: 0 10px 10px 0; font-size: 12px; color: var(--silver); white-space: pre-wrap; }
+.source small { display: block; color: var(--cyan); font-size: 10px; letter-spacing: .06em; text-transform: uppercase; margin-bottom: 4px; }
+.admin-form input[type="file"] { padding: 8px; }
+.office-hud__team.btn-row .btn { padding: 9px 8px; font-size: 12px; }

@@ -77,6 +77,8 @@ class TaskService
             ->where('c.tenant_id', Services::tenantContext()->id())->where('c.task_id', $id)
             ->orderBy('c.id')->get()->getResultArray();
 
+        $task['sources'] = json_decode($task['sources'] ?? 'null', true) ?: [];
+
         return ['task' => $task, 'children' => $children, 'logs' => $logs, 'conversation' => $conversation];
     }
 

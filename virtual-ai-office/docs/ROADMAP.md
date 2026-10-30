@@ -12,7 +12,7 @@ Status: ✅ selesai · 🟡 fondasi tersedia · ⬜ belum
 - ✅ Agent AI sebagai karakter robot (instanced), warna visor = status, jalan ke pantry, simulasi rapat (visual)
 
 ## PHASE 2 – Core SaaS 🟡
-- ✅ Skema database lengkap (27 tabel) + seeder
+- ✅ Skema database lengkap (28 tabel) + seeder
 - ✅ Login/logout (session, CSRF, rate limit, audit)
 - ✅ Multi-tenant: TenantFilter + TenantScopedModel + tes isolasi
 - ✅ RBAC filter (`role:`)
@@ -43,7 +43,12 @@ Status: ✅ selesai · 🟡 fondasi tersedia · ⬜ belum
   **Multi-agent**: Manager memakai tool `delegate_tasks` (strict) → sub-tugas untuk anggota timnya →
   setelah semua selesai Manager menyusun laporan akhir. Token per task/agent/tenant + kuota bulanan
   agent & paket, log eksekusi, percakapan agent↔agent, status robot 3D live, panel Task Monitoring.
-- ⬜ 3.2 Knowledge base (unggah dokumen, dipakai agent sebagai konteks)
+- ✅ **3.2 Knowledge base** — unggah `.pdf/.docx/.txt/.md/.csv/.html` (maks. 10 MB, disimpan di luar
+  web root) atau tempel teks; teks diekstrak & dipecah (~1.500 karakter, overlap) ke `knowledge_chunks`.
+  Agent yang terhubung menerima KB sebagai *document block* bercitasi: KB kecil dikirim utuh +
+  prompt caching, KB besar hanya potongan paling relevan (TF-IDF). Sitasi dipetakan ke potongan dan
+  ditampilkan sebagai **Sumber** pada hasil task. Isi dokumen diperlakukan sebagai data (bukan instruksi).
+  Khusus Owner/Admin, terisolasi per tenant.
 - ⬜ 3.3 Tools & integrasi (HTTP/webhook tool per tenant, WhatsApp, CRM) + persetujuan manusia
 - ⬜ 3.4 Streaming progres task (SSE) & dashboard penggunaan AI
 

@@ -14,6 +14,7 @@ interface LlmProvider
      *   system: string,
      *   messages: list<array{role: string, content: string}>,
      *   tools?: list<array>,
+     *   documents?: list<array{title: string, context?: string, chunks: list<string>, cache?: bool}>,
      *   effort?: string,
      *   max_tokens?: int
      * } $request

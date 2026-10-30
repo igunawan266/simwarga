@@ -38,6 +38,12 @@ $routes->group('api/v1', ['namespace' => 'App\Controllers\Api\V1', 'filter' => '
         $routes->get('tasks', 'AgentsController::tasks');
         $routes->get('tasks/(:num)', 'AgentsController::task/$1');
         $routes->post('tasks/(:num)/cancel', 'AgentsController::cancel/$1');
+        $routes->group('knowledge', ['filter' => 'role:tenant_owner,tenant_admin'], static function (RouteCollection $routes) {
+            $routes->get('/', 'KnowledgeController::index');
+            $routes->post('/', 'KnowledgeController::create');
+            $routes->get('(:num)', 'KnowledgeController::show/$1');
+            $routes->delete('(:num)', 'KnowledgeController::delete/$1');
+        });
         $routes->group('agents', ['filter' => 'role:tenant_owner,tenant_admin'], static function (RouteCollection $routes) {
             $routes->post('/', 'AgentsController::create');
             $routes->patch('(:num)', 'AgentsController::update/$1');

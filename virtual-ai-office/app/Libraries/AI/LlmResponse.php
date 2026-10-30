@@ -16,6 +16,8 @@ final class LlmResponse
         public readonly int $outputTokens,
         public readonly string $model,
         public readonly ?string $refusalCategory = null,
+        /** @var list<array{document_index: int, start_block_index: int, end_block_index: int, cited_text: string}> */
+        public readonly array $citations = [],
     ) {
     }
 

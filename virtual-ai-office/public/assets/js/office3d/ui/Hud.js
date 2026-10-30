@@ -192,6 +192,9 @@ export class Hud {
 
     // ---------------------------------------------------------------- office
     renderOffice(office) {
+        // Owner/admin-only controls (the server enforces the same rule).
+        const manager = ['tenant_owner', 'tenant_admin'].includes(office.tenant.role);
+        document.querySelectorAll('[data-owner-only]').forEach((el) => { el.hidden = !manager; });
         $('#office-name').textContent = office.tenant.name;
         $('#office-meta').textContent = `Lantai ${office.office.floor_number} · Suite ${office.office.number}`;
         $('#office-color').style.background = office.tenant.color;
@@ -636,6 +639,7 @@ export function agentPanelHtml(a, tasks, canManage) {
             <dt>Aktif</dt><dd>${a.is_active ? 'Ya' : 'Tidak'}</dd>
             <dt>Ruangan</dt><dd>${esc(a.room_name ?? 'Belum ditempatkan')}</dd>
             <dt>Model</dt><dd>${esc(a.model?.name ?? '-')}${a.effort ? ` · effort ${esc(a.effort)}` : ''}</dd>
+            <dt>Knowledge base</dt><dd>${a.knowledge_base_id ? 'Terhubung' : 'Tidak ada'}</dd>
             <dt>Token bulan ini</dt><dd>${fmtTokens(a.tokens_used_month)}${a.token_limit_monthly ? ` / ${fmtTokens(a.token_limit_monthly)}` : ''}</dd>
             ${a.team?.length ? `<dt>Tim</dt><dd>${a.team.map((m) => esc(m.name)).join(', ')}</dd>` : ''}
         </dl>
@@ -655,7 +659,7 @@ export function agentPanelHtml(a, tasks, canManage) {
         ${tasks.map(taskRow).join('') || '<div class="empty">Belum ada task.</div>'}`;
 }
 
-export function agentFormHtml(agent, { rooms, models, agents, roomId }) {
+export function agentFormHtml(agent, { rooms, models, agents, roomId, knowledge = [] }) {
     const v = agent ?? {};
     const room = agent ? agent.room_id : roomId;
     const opt = (value, label, selected) => `<option value="${esc(value)}" ${selected ? 'selected' : ''}>${esc(label)}</option>`;
@@ -670,6 +674,7 @@ export function agentFormHtml(agent, { rooms, models, agents, roomId }) {
                 <label>Ruangan<select name="room_id">${opt('', '— belum ditempatkan —', !room)}${rooms.filter((r) => r.enabled).map((r) => opt(r.id, r.name, r.id === room)).join('')}</select></label>
                 <label>Model AI<select name="ai_model_id">${models.map((m) => opt(m.id, m.display_name, Number(m.id) === v.model?.id)).join('')}</select></label>
                 <label>Effort<select name="effort">${['low', 'medium', 'high', 'xhigh', 'max'].map((e) => opt(e, e, e === (v.effort ?? 'medium'))).join('')}</select></label>
+                <label>Knowledge base<select name="knowledge_base_id">${opt('', '— tidak ada —', !v.knowledge_base_id)}${(knowledge || []).filter((k) => k.status === 'ready').map((k) => opt(k.id, k.name, k.id === v.knowledge_base_id)).join('')}</select></label>
                 <label>Manager<select name="manager_agent_id">${opt('', '— tidak ada —', !v.manager_agent_id)}${agents.filter((a) => a.id !== v.id).map((a) => opt(a.id, `${a.name} (${a.job_title})`, a.id === v.manager_agent_id)).join('')}</select></label>
                 <label>Batas token/bulan (0 = paket)<input name="token_limit_monthly" type="number" min="0" step="1000" value="${Number(v.token_limit_monthly ?? 0)}"></label>
             </div>
@@ -699,6 +704,8 @@ export function taskPanelHtml(d) {
         <div class="section-label">Instruksi</div>
         <div class="task-text">${esc(t.instruction)}</div>
         ${t.status === 'completed' ? `<div class="section-label">Hasil</div><div class="task-text task-text--result">${esc(t.result)}</div>` : ''}
+        ${t.sources?.length ? `<div class="section-label">Sumber dari knowledge base (${t.sources.length})</div>
+            ${t.sources.map((s) => `<blockquote class="source"><small>${esc(s.knowledge_base)} · bagian ${Number(s.chunk)}</small>“${esc(s.quote)}”</blockquote>`).join('')}` : ''}
         ${t.error_message ? `<div class="prototype-box"><b>${t.status === 'queued' ? 'AKAN DICOBA LAGI' : 'TIDAK SELESAI'}</b>${esc(t.error_message)}</div>` : ''}
         ${d.children.length ? `<div class="section-label">Didelegasikan ke tim (${d.children.length})</div>${d.children.map((c) => taskRow(c)).join('')}` : ''}
         <div class="section-label">Riwayat eksekusi</div>
@@ -713,4 +720,52 @@ export function tasksPanelHtml(tasks) {
         <h3>Task Monitoring</h3>
         <div class="muted">Task terbaru yang diberikan kepada Agent AI (tanpa sub-tugas delegasi).</div>
         ${tasks.map(taskRow).join('') || '<div class="empty">Belum ada task. Buka agent lalu beri tugas.</div>'}`;
+}
+
+// ---------------------------------------------------------------------- knowledge base
+const KB_COLORS = { ready: '#34d399', indexing: '#38bdf8', error: '#f87171', pending: '#94a3b8' };
+const kbSize = (kb) => (kb.char_count ? `${Number(kb.char_count).toLocaleString('id-ID')} karakter · ${kb.chunk_count} bagian` : '');
+
+export function knowledgePanelHtml(list) {
+    return `
+        <div class="eyebrow">Kantor Anda</div>
+        <h3>Knowledge Base</h3>
+        <div class="muted">Dokumen perusahaan (SOP, katalog, FAQ, kebijakan) yang dipakai agent sebagai sumber fakta. Hubungkan ke agent lewat form Edit agent. Hasil task menampilkan kutipan sumbernya.</div>
+        ${list.map((kb) => `
+            <div class="kb-card">
+                <div class="kb-card__head"><b>${esc(kb.name)}</b><span class="status-pill" style="--c:${KB_COLORS[kb.status] || '#94a3b8'}">${esc(kb.status)}</span></div>
+                <small>${esc(kb.original_filename ?? 'Teks')} ${kbSize(kb) ? '· ' + kbSize(kb) : ''}</small>
+                ${kb.error_message ? `<small class="kb-error">${esc(kb.error_message)}</small>` : ''}
+                ${kb.agents?.length ? `<small>Dipakai oleh: ${kb.agents.map(esc).join(', ')}</small>` : ''}
+                <div class="btn-row">
+                    <button class="btn" data-action="kb-open" data-kb="${kb.id}">Pratinjau</button>
+                    <button class="btn btn--danger" data-action="kb-delete" data-kb="${kb.id}">Hapus</button>
+                </div>
+            </div>`).join('') || '<div class="empty">Belum ada knowledge base.</div>'}
+        <div class="section-label">Tambah knowledge base</div>
+        <form class="admin-form" data-form="knowledge" enctype="multipart/form-data">
+            <label>Nama<input name="name" maxlength="150" placeholder="mis. SOP Customer Service"></label>
+            <label>Deskripsi (opsional)<input name="description" maxlength="1000" placeholder="Isi dan kapan dokumen ini dipakai"></label>
+            <label>File (.pdf, .docx, .txt, .md, .csv, .html — maks. 10 MB)<input name="file" type="file" accept=".pdf,.docx,.txt,.md,.csv,.html,.htm"></label>
+            <label>…atau tempel teks<textarea name="text" rows="5" placeholder="Tempel isi dokumen di sini bila tidak mengunggah file."></textarea></label>
+            <div class="form-error" hidden></div>
+            <button class="btn btn--primary" type="submit">Simpan &amp; proses</button>
+        </form>`;
+}
+
+export function knowledgeDetailHtml(d) {
+    const kb = d.knowledge_base;
+    return `
+        <div class="eyebrow">Knowledge base</div>
+        <h3>${esc(kb.name)}</h3>
+        <div class="muted">${esc(kb.description ?? '')}</div>
+        <dl class="kv">
+            <dt>Status</dt><dd>${esc(kb.status)}</dd>
+            <dt>Sumber</dt><dd>${esc(kb.original_filename ?? 'Teks')}</dd>
+            <dt>Ukuran</dt><dd>${kbSize(kb) || '-'}</dd>
+            <dt>Agent</dt><dd>${d.agents.map((a) => esc(a.name)).join(', ') || 'Belum dipakai'}</dd>
+        </dl>
+        <div class="section-label">Pratinjau (${d.preview.length} bagian pertama)</div>
+        ${d.preview.map((c) => `<blockquote class="source"><small>bagian ${c.seq + 1}</small>${esc(c.text)}${c.text.length >= 600 ? '…' : ''}</blockquote>`).join('') || '<div class="empty">Tidak ada isi.</div>'}
+        <button class="btn btn--block" data-action="knowledge">← Semua knowledge base</button>`;
 }
