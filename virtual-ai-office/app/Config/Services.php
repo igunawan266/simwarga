@@ -64,4 +64,13 @@ class Services extends BaseService
 
         return new \App\Libraries\Payment\Tripay\TripayClient(config('Tripay'));
     }
+
+    public static function llm(bool $getShared = true): \App\Libraries\AI\LlmProvider
+    {
+        if ($getShared) {
+            return static::getSharedInstance('llm');
+        }
+
+        return new \App\Libraries\AI\AnthropicProvider(config('Ai'));
+    }
 }

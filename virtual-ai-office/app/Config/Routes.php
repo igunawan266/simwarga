@@ -29,6 +29,22 @@ $routes->group('api/v1', ['namespace' => 'App\Controllers\Api\V1', 'filter' => '
             $routes->get('invoices/(:num)/pdf', 'PaymentController::pdf/$1');
             $routes->post('subscription/renew', 'PaymentController::renew');
         });
+        // AI agents & tasks
+        $routes->get('agents', 'AgentsController::index');
+        $routes->get('agents/live', 'AgentsController::live');
+        $routes->get('agents/(:num)', 'AgentsController::show/$1');
+        $routes->get('ai-models', 'AgentsController::models');
+        $routes->post('agents/(:num)/tasks', 'AgentsController::assign/$1');
+        $routes->get('tasks', 'AgentsController::tasks');
+        $routes->get('tasks/(:num)', 'AgentsController::task/$1');
+        $routes->post('tasks/(:num)/cancel', 'AgentsController::cancel/$1');
+        $routes->group('agents', ['filter' => 'role:tenant_owner,tenant_admin'], static function (RouteCollection $routes) {
+            $routes->post('/', 'AgentsController::create');
+            $routes->patch('(:num)', 'AgentsController::update/$1');
+            $routes->delete('(:num)', 'AgentsController::delete/$1');
+            $routes->post('(:num)/activate', 'AgentsController::activate/$1');
+            $routes->post('(:num)/deactivate', 'AgentsController::deactivate/$1');
+        });
         $routes->get('notifications', 'NotificationsController::index');
         $routes->post('notifications/read', 'NotificationsController::markRead');
         $routes->get('members', 'MembersController::index');

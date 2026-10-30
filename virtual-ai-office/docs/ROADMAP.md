@@ -34,12 +34,18 @@ Status: ✅ selesai · 🟡 fondasi tersedia · ⬜ belum
   invoice `expired`. Tidak ada pembayaran yang disimulasikan.
 - ⬜ 2.4 Penegakan limit paket saat membuat agent/ruangan (bersama Phase 3)
 
-## PHASE 3 – AI Engine ⬜
-- ⬜ CRUD Agent (create/edit/delete/activate/deactivate/assign room)
-- ⬜ Provider LLM + tool calling, knowledge base
-- ⬜ Queue worker (Redis), task assignment, delegasi Manager → agent
-- ⬜ Agent-to-agent conversation, execution history, token usage & limit
-- ⬜ Status agent live di scene 3D (polling/SSE)
+## PHASE 3 – AI Engine 🟡
+- ✅ **3.1 Agent, task & multi-agent** — CRUD agent (buat/edit/hapus/aktifkan/nonaktifkan, ruangan,
+  model, effort, manager, batas token) dengan **batas `max_agents` paket di server**; system prompt hanya
+  untuk Owner/Admin. Task masuk antrean DB, diproses `php spark agents:work` (klaim atomik, beberapa
+  worker aman, prioritas, retry backoff untuk 429/5xx/jaringan). Claude via **SDK PHP resmi**
+  (`claude-opus-5-5` default, adaptive thinking, `effort` per agent, refusal fallback server-side).
+  **Multi-agent**: Manager memakai tool `delegate_tasks` (strict) → sub-tugas untuk anggota timnya →
+  setelah semua selesai Manager menyusun laporan akhir. Token per task/agent/tenant + kuota bulanan
+  agent & paket, log eksekusi, percakapan agent↔agent, status robot 3D live, panel Task Monitoring.
+- ⬜ 3.2 Knowledge base (unggah dokumen, dipakai agent sebagai konteks)
+- ⬜ 3.3 Tools & integrasi (HTTP/webhook tool per tenant, WhatsApp, CRM) + persetujuan manusia
+- ⬜ 3.4 Streaming progres task (SSE) & dashboard penggunaan AI
 
 ## PHASE 4 – Payment (Tripay) 🟡
 - ✅ **4.1 Pembayaran & aktivasi** — konfigurasi merchant sandbox/production dari `.env`;

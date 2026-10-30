@@ -73,7 +73,7 @@ final class TenantIsolationTest extends CIUnitTestCase
 
         $this->assertSame('Nusantara Digital Group', $data['tenant']['name']);
         $this->assertSame(7, $data['office']['floor_number']);
-        $this->assertCount(16, $data['agents']);
+        $this->assertCount(15, $data['agents']);
         $this->assertArrayNotHasKey('system_prompt', $data['agents'][0]);
     }
 

@@ -130,7 +130,10 @@ kabin turun → pintu buka/tutup → kamera mengikuti kabin naik → pintu terbu
 
 ## 7. Desain modul berikutnya (ringkas)
 
-**AI Engine (Phase 3)** — `agent_tasks` dengan `parent_task_id` untuk delegasi Manager → agent lain;
+**AI Engine (Phase 3.1, sudah dibangun)** — `app/Libraries/AI/` (`LlmProvider` + `AnthropicProvider`
+memakai SDK PHP resmi `anthropic-ai/sdk`), `app/Services/AI/` (`AgentService`, `TaskService`,
+`AgentWorker`), perintah `agents:work`. Worker menyetel `TenantContext` per task sehingga model
+ter-scope tenant tetap terisolasi walau satu worker melayani semua tenant. Rancangan awal: `agent_tasks` dengan `parent_task_id` untuk delegasi Manager → agent lain;
 worker CLI (`php spark agents:work`) mengambil task `queued` dari Redis/DB, memanggil LLM dengan
 tool calling, menulis `agent_logs` + `agent_conversations`, menambah token usage dan menegakkan
 `token_limit_monthly` serta kuota paket. Status agent di 3D di-polling/SSE.

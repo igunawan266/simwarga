@@ -148,7 +148,7 @@ final class BillingLifecycleTest extends CIUnitTestCase
         $this->assertSame('expired', $db->table('tenants')->where('id', $this->tenantId)->get()->getRow()->status);
         $this->assertSame('expired', $this->renewalInvoices()[0]['status']);
         $this->client($this->owner)->get('api/v1/office')->assertStatus(402);
-        $this->assertSame(16, $db->table('ai_agents')->where('tenant_id', $this->tenantId)->countAllResults(), 'data kept');
+        $this->assertSame(15, $db->table('ai_agents')->where('tenant_id', $this->tenantId)->countAllResults(), 'data kept');
 
         // The owner can still log in, request a renewal and pay it.
         $this->client($this->owner)->get('api/v1/office/billing')->assertStatus(200);

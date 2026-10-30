@@ -33,15 +33,15 @@ class DemoSeeder extends Seeder
         $this->user('admin@demo.test', 'Demo Super Admin', $roles['super_admin'], $hash);
 
         $tenants = [
-            // slug, company, color, industry, floor, plan, full office?
-            ['nusantara-digital', 'Nusantara Digital Group', '#22d3ee', 'Digital Agency', 7, 'PROFESSIONAL', true],
-            ['arunika-logistics', 'Arunika Logistics', '#38bdf8', 'Logistik', 3, 'BUSINESS', false],
-            ['sagara-retail', 'Sagara Retail', '#a78bfa', 'Retail', 5, 'STARTER', false],
-            ['bumi-fintech', 'Bumi Fintech', '#34d399', 'Fintech', 9, 'ENTERPRISE', false],
-            ['kirana-health', 'Kirana Health', '#f472b6', 'Kesehatan', 11, 'BUSINESS', false],
+            // slug, company, color, industry, floor, plan
+            ['nusantara-digital', 'Nusantara Digital Group', '#22d3ee', 'Digital Agency', 7, 'PROFESSIONAL'],
+            ['arunika-logistics', 'Arunika Logistics', '#38bdf8', 'Logistik', 3, 'BUSINESS'],
+            ['sagara-retail', 'Sagara Retail', '#a78bfa', 'Retail', 5, 'STARTER'],
+            ['bumi-fintech', 'Bumi Fintech', '#34d399', 'Fintech', 9, 'ENTERPRISE'],
+            ['kirana-health', 'Kirana Health', '#f472b6', 'Kesehatan', 11, 'BUSINESS'],
         ];
 
-        foreach ($tenants as [$slug, $company, $color, $industry, $floorNo, $planCode, $full]) {
+        foreach ($tenants as [$slug, $company, $color, $industry, $floorNo, $planCode]) {
             if ($this->db->table('tenants')->where('slug', $slug)->countAllResults() > 0) {
                 continue; // already seeded
             }
@@ -90,18 +90,20 @@ class DemoSeeder extends Seeder
                 $this->member($tenantId, $owner, $roles['tenant_owner']);
             }
 
-            $this->createAgents($tenantId, $rooms, $full ? null : (int) $plan['max_agents']);
+            // Demo data respects the plan's agent limit like real tenants do.
+            $this->createAgents($tenantId, $rooms, (int) $plan['max_agents']);
         }
     }
 
-    private function createAgents(int $tenantId, array $rooms, ?int $limit): void
+    private function createAgents(int $tenantId, array $rooms, int $limit): void
     {
-        $model = $this->db->table('ai_models')->where('model_key', 'claude-sonnet-5-5')->get()->getRowArray();
+        $model = $this->db->table('ai_models')->where('model_key', config('Ai')->defaultModel)->get()->getRowArray();
 
         // name, title, department, room slug, status, description
         $agents = [
             ['Aira', 'AI Receptionist', 'Front Office', 'main_lobby', 'online', 'Menyambut tamu, menjawab pertanyaan umum dan mengarahkan ke departemen.'],
             ['Atlas', 'AI Manager', 'Management', 'ceo_office', 'working', 'Menerima instruksi pemilik lalu membagi pekerjaan ke agent lain.'],
+            ['Byte', 'AI IT Support', 'IT', 'it_server', 'online', 'Memantau sistem, integrasi API dan penggunaan AI.'],
             ['Maya', 'AI Marketing', 'Marketing', 'marketing', 'working', 'Menyusun strategi kampanye dan kalender konten.'],
             ['Sora', 'AI Social Media', 'Marketing', 'marketing', 'idle', 'Menjadwalkan dan membalas konten media sosial.'],
             ['Kenzo', 'AI Content Creator', 'Marketing', 'marketing', 'working', 'Menulis artikel, caption dan naskah video.'],
@@ -115,11 +117,8 @@ class DemoSeeder extends Seeder
             ['Tara', 'AI Complaint Handler', 'Customer Service', 'customer_service', 'error', 'Menangani keluhan dan eskalasi.'],
             ['Fina', 'AI Finance Assistant', 'Finance', 'finance', 'idle', 'Membantu pencatatan keuangan.'],
             ['Ivo', 'AI Invoice Manager', 'Finance', 'finance', 'working', 'Membuat dan memantau invoice pelanggan.'],
-            ['Byte', 'AI IT Support', 'IT', 'it_server', 'online', 'Memantau sistem, integrasi API dan penggunaan AI.'],
         ];
-        if ($limit !== null) {
-            $agents = array_slice($agents, 0, $limit);
-        }
+        $agents = array_slice($agents, 0, $limit);
 
         $managerId = null;
         foreach ($agents as [$name, $title, $dept, $room, $status, $desc]) {
@@ -133,7 +132,7 @@ class DemoSeeder extends Seeder
                 'department'       => $dept,
                 'job_description'  => $desc,
                 'system_prompt'    => "Kamu adalah {$name}, {$title}. {$desc} Jawab dalam Bahasa Indonesia yang profesional.",
-                'api_config'       => json_encode(['temperature' => 0.4, 'max_tokens' => 1024]),
+                'api_config'       => json_encode(['effort' => 'medium']),
                 'status'           => $status,
                 'is_active'        => $status === 'offline' ? 0 : 1,
                 'token_limit_monthly' => 100000,

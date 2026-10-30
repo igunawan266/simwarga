@@ -5,7 +5,7 @@ import { api, ApiError } from './core/api.js';
 import { DIM, floorY, floorHeight } from './core/config.js';
 import { Building } from './building/Building.js';
 import { Elevator } from './building/Elevator.js';
-import { Hud, esc, adminFloorHtml, plansPanelHtml, teamPanelHtml, registerPanelHtml, billingPanelHtml, channelsPanelHtml, paymentPanelHtml, notificationsPanelHtml, setUnread } from './ui/Hud.js';
+import { Hud, esc, agentPanelHtml, agentFormHtml, taskPanelHtml, tasksPanelHtml, adminFloorHtml, plansPanelHtml, teamPanelHtml, registerPanelHtml, billingPanelHtml, channelsPanelHtml, paymentPanelHtml, notificationsPanelHtml, setUnread } from './ui/Hud.js';
 
 /**
  * Application controller / state machine.
@@ -41,6 +41,18 @@ class App {
             submitLogin: (email, pw) => this.login(email, pw),
             logout: () => this.logout(),
             'simulate-meeting': () => this.simulateMeeting(),
+            // AI agents & tasks
+            agent: (d) => this.openAgent(Number(d.agent)),
+            'agent-new': (d) => this.openAgentForm(null, Number(d.room) || null),
+            'agent-edit': (d) => this.openAgentForm(Number(d.agent)),
+            'agent-activate': (d) => this.agentAction(() => api.agents.activate(d.agent), 'Agent diaktifkan.', Number(d.agent)),
+            'agent-deactivate': (d) => this.agentAction(() => api.agents.deactivate(d.agent), 'Agent dinonaktifkan.', Number(d.agent)),
+            'agent-delete': (d, el) => this.confirmTwice(el, () => this.agentAction(() => api.agents.remove(d.agent), 'Agent dihapus.', null, true)),
+            'form:agent': (v, f) => this.saveAgent(v, f),
+            'form:assign-task': (v, f) => this.assignTask(Number(f.dataset.agent), v, f),
+            task: (d) => this.openTask(Number(d.task)),
+            'task-cancel': (d) => this.agentAction(() => api.tasks.cancel(d.task), 'Task dibatalkan.').then(() => this.openTask(Number(d.task))),
+            tasks: () => this.openTasks(),
             escape: () => this.escape(),
             // Super Admin
             'admin-plans': () => this.adminPlans(),
@@ -541,6 +553,7 @@ class App {
 
     async officeOverview() {
         await this.ensureInterior();
+        this.startLivePolling();
         this.setMode('office');
         this.selectedRoom = null;
         this.interior.setSelected(null);
@@ -566,7 +579,7 @@ class App {
         const fly = this.camera.flyTo(cam.position, cam.target, { duration: 1.4, limits: { min: 5, max: 40, maxPolar: Math.PI * 0.45, pan: true } });
         try {
             const detail = await api.room(id);
-            if (this.selectedRoom === id) this.hud.roomPanel(detail);
+            if (this.selectedRoom === id) this.hud.roomPanel(detail, { canManage: this.canManage() });
         } catch (e) {
             this.hud.toast(e.message, 'error');
         }
@@ -578,7 +591,129 @@ class App {
         this.hud.toast(n ? `${n} agent menuju Meeting Room (simulasi visual).` : 'Tidak ada agent yang tersedia untuk rapat.');
     }
 
+    // ---------------------------------------------------------------- AI agents & tasks
+    canManage() {
+        return ['tenant_owner', 'tenant_admin'].includes(this.session?.tenant?.role);
+    }
+
+    async openAgent(id) {
+        this.stopTaskPolling();
+        try {
+            const [{ agent, can_manage: canManage }, { tasks }] = await Promise.all([api.agents.get(id), api.tasks.list({ agent_id: id, limit: 10 })]);
+            this.hud.showPanel(agentPanelHtml(agent, tasks, canManage));
+        } catch (e) {
+            this.hud.toast(e.message, 'error');
+        }
+    }
+
+    async openAgentForm(id, roomId = null) {
+        try {
+            const [{ models }, { agents }, detail] = await Promise.all([
+                api.agents.models(), api.agents.list(), id ? api.agents.get(id) : Promise.resolve(null),
+            ]);
+            this.hud.showPanel(agentFormHtml(detail?.agent ?? null, { rooms: this.office.rooms, models, agents, roomId }));
+            document.getElementById('info-panel').classList.add('info-panel--wide');
+        } catch (e) {
+            this.hud.toast(e.message, 'error');
+        }
+    }
+
+    async saveAgent(values, form) {
+        const err = form.querySelector('.form-error');
+        err.hidden = true;
+        try {
+            const id = form.dataset.agent;
+            const { agent } = id ? await api.agents.update(id, values) : await api.agents.create(values);
+            this.hud.toast(id ? 'Agent disimpan.' : 'Agent dibuat. Aktifkan agar bisa menerima tugas.');
+            await this.reloadOffice();
+            this.openAgent(agent.id);
+        } catch (e) {
+            err.textContent = e.message;
+            err.hidden = false;
+        }
+    }
+
+    async agentAction(fn, message, reopenAgent = null, reload = false) {
+        try {
+            await fn();
+        } catch (e) {
+            this.hud.toast(e.message, 'error', 5000);
+            return;
+        }
+        this.hud.toast(message);
+        if (reload || reopenAgent) await this.reloadOffice();
+        if (reopenAgent) this.openAgent(reopenAgent);
+        else if (reload) this.hud.hidePanel();
+    }
+
+    async assignTask(agentId, values, form) {
+        form.querySelector('button[type=submit]').disabled = true;
+        try {
+            const { task } = await api.agents.assign(agentId, values);
+            this.hud.toast('Tugas masuk antrean.');
+            this.openTask(task.id);
+        } catch (e) {
+            this.hud.toast(e.message, 'error', 5000);
+            form.querySelector('button[type=submit]').disabled = false;
+        }
+    }
+
+    async openTask(id) {
+        this.stopTaskPolling();
+        try {
+            const detail = await api.tasks.get(id);
+            this.hud.showPanel(taskPanelHtml(detail));
+            document.getElementById('info-panel').classList.add('info-panel--wide');
+            if (['queued', 'running', 'waiting'].includes(detail.task.status)) {
+                // Refresh while the task is open and still moving.
+                this.taskPoll = setTimeout(() => document.getElementById('task-status') && this.openTask(id), 5000);
+            }
+        } catch (e) {
+            this.hud.toast(e.message, 'error');
+        }
+    }
+
+    stopTaskPolling() {
+        clearTimeout(this.taskPoll);
+    }
+
+    async openTasks() {
+        this.stopTaskPolling();
+        try {
+            const { tasks } = await api.tasks.list({ top_level: 1, limit: 30 });
+            this.hud.showPanel(tasksPanelHtml(tasks));
+        } catch (e) {
+            this.hud.toast(e.message, 'error');
+        }
+    }
+
+    /** Re-read the office (agents, rooms) and rebuild the interior in place, without a camera ride. */
+    async reloadOffice() {
+        this.office = await api.office();
+        if (!this.interior) return;
+        this.crowd?.dispose();
+        this.interior.dispose();
+        this.crowd = this.interior = this.interiorReady = null;
+        await this.ensureInterior();
+        if (this.selectedRoom) this.interior.setSelected(this.selectedRoom);
+        this.hud.renderOffice(this.office);
+    }
+
+    /** Visor colours follow the agents' real status (polled while inside the office). */
+    startLivePolling() {
+        clearInterval(this.livePoll);
+        this.livePoll = setInterval(async () => {
+            if (document.hidden || !this.crowd) return;
+            try {
+                const { agents } = await api.agents.live();
+                this.crowd.updateStatuses(agents);
+            } catch { /* transient */ }
+        }, 6000);
+    }
+
     leaveOffice() {
+        clearInterval(this.livePoll);
+        this.stopTaskPolling();
         this.interiorReady = null;
         if (!this.interior) return;
         this.crowd?.dispose();
@@ -730,7 +865,7 @@ class App {
             const agentHit = this.pick(e, this.crowd.hitTargets);
             const actor = agentHit && this.crowd.actorFromHit(agentHit);
             if (actor) {
-                this.hud.agentPanel(actor.agent, actor.room);
+                this.openAgent(actor.agent.id);
                 return;
             }
             const hit = this.pick(e, this.interior.hitMeshes);

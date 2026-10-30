@@ -40,6 +40,17 @@ Di server production, jadwalkan pelepasan reservasi yang tidak dibayar (setiap 5
 php spark office:expire-reservations
 ```
 
+### Mengaktifkan AI Engine (Claude)
+
+1. Isi `ai.anthropicApiKey` di `.env` (model default `claude-opus-5-5`; bisa diganti per agent).
+2. Jalankan worker antrean task (pakai supervisor/systemd di production; boleh lebih dari satu):
+
+```bash
+php spark agents:work
+```
+
+Tanpa worker, task tetap berstatus *antre*. Untuk menguji sekali jalan: `php spark agents:work --once`.
+
 ### Mengaktifkan pembayaran Tripay
 
 1. Isi `tripay.merchantCode`, `tripay.apiKey`, `tripay.privateKey` (dan `tripay.mode`) di `.env`.
@@ -69,7 +80,7 @@ php spark tripay:reconcile
 
 | Email | Password | Peran |
 |---|---|---|
-| `owner@demo.test` | `DemoOffice#2026` | Tenant Owner — Nusantara Digital Group, lantai 7 (kantor lengkap, 16 agent) |
+| `owner@demo.test` | `DemoOffice#2026` | Tenant Owner — Nusantara Digital Group, lantai 7 (kantor lengkap, 15 agent — batas paket Professional) |
 | `staff@demo.test` | `DemoOffice#2026` | Tenant Staff — Nusantara Digital Group |
 | `owner2@demo.test` | `DemoOffice#2026` | Tenant Owner — Arunika Logistics, lantai 3 |
 | `admin@demo.test` | `DemoOffice#2026` | Super Admin (belum punya console; Phase 5) |
@@ -92,6 +103,9 @@ Data demo memakai langganan **trial**; tidak ada invoice atau pembayaran palsu y
 9. Tanpa login, klik lantai kosong → **Sewa lantai ini** → pilih paket & isi data → kantor di-reserve,
    invoice dibuat, panel **Tagihan** terbuka → **Bayar via Tripay** → pilih kanal → instruksi bayar.
    Setelah callback PAID terverifikasi, elevator otomatis membawa Anda ke kantor.
+10. Di ruangan mana pun, klik agent → **Edit** / **Aktifkan** / **Beri tugas**. Beri tugas ke **Atlas
+    (AI Manager)** di CEO Office: ia membagi pekerjaan ke timnya lalu menyusun laporan akhir. Tombol
+    **Task** di HUD kantor menampilkan Task Monitoring. (Butuh `ai.anthropicApiKey` + `php spark agents:work`.)
 
 Tombol fitur fase berikutnya ditampilkan non-aktif dengan label **PHASE n / PROTOTYPE**.
 
@@ -133,6 +147,12 @@ update `tenant_id`, delete lintas tenant).
 | POST | `/api/v1/office/subscription/renew` | owner/admin — buat/ambil invoice perpanjangan |
 | GET / POST | `/api/v1/office/notifications[/read]` | anggota — notifikasi (billing hanya owner/admin) |
 | GET | `/api/v1/admin/invoices/{id}/pdf` | super_admin — invoice PDF tenant mana pun |
+| GET | `/api/v1/office/agents[/{id}]` | anggota — daftar/detail agent (system prompt hanya owner/admin) |
+| POST / PATCH / DELETE | `/api/v1/office/agents[/{id}]` | owner/admin — kelola agent (batas paket) |
+| POST | `/api/v1/office/agents/{id}/activate` · `/deactivate` | owner/admin |
+| POST | `/api/v1/office/agents/{id}/tasks` | anggota — beri tugas (`title`, `instruction`, `priority`) |
+| GET | `/api/v1/office/tasks[/{id}]` · POST `/tasks/{id}/cancel` | anggota — monitoring, detail (sub-tugas, log, percakapan) |
+| GET | `/api/v1/office/agents/live` · `/ai-models` | anggota — status live untuk 3D, katalog model |
 | GET | `/api/v1/office/members` | auth + tenant — daftar anggota |
 | POST | `/api/v1/office/members` | owner/admin — undang (`email`, `role`) → `invite_url` |
 | PATCH / DELETE | `/api/v1/office/members/{id}` | owner/admin — ubah peran/status, hapus |

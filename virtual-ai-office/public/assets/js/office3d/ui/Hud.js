@@ -214,52 +214,35 @@ export class Hud {
         document.querySelectorAll('.room-chip[data-room]').forEach((b) => b.classList.toggle('is-active', Number(b.dataset.room) === id));
     }
 
-    roomPanel(detail, { loading = false } = {}) {
+    roomPanel(detail, { loading = false, canManage = false } = {}) {
         if (loading) {
             this.showPanel('<div class="eyebrow">Memuat ruangan…</div><h3>&nbsp;</h3>');
             return;
         }
         const r = detail.room;
         const agents = detail.agents.map((a) => this.agentCard(a)).join('') || '<div class="empty">Belum ada Agent AI di ruangan ini.</div>';
-        const tasks = detail.recent_tasks.map((t) => `<div class="agent-card"><span class="bot">#</span><div><b>${esc(t.title)}</b><small>${esc(t.created_at)}</small></div>${this.pill(t.status)}</div>`).join('')
-            || '<div class="empty">Belum ada task. Task Assignment tersedia pada Phase 3.</div>';
+        const tasks = detail.recent_tasks.map((t) => taskRow(t)).join('') || '<div class="empty">Belum ada task untuk agent di ruangan ini.</div>';
         const meeting = r.type === 'meeting_room' && r.enabled
-            ? `<div class="prototype-box"><b>SIMULASI VISUAL</b>Agent berjalan ke ruang rapat lalu kembali ke meja. Koordinasi AI sungguhan (Multi-Agent Orchestration) dibangun di Phase 3.
+            ? `<div class="prototype-box"><b>SIMULASI VISUAL</b>Animasi agent berjalan ke ruang rapat. Koordinasi AI sungguhan: beri tugas ke agent Manager — ia membagi pekerjaan ke timnya.
                 <br><button class="btn" data-action="simulate-meeting">Simulasikan rapat</button></div>` : '';
         this.showPanel(`
             <div class="eyebrow">${esc(r.category === 'common' ? 'Fasilitas umum' : 'Ruang operasional')}</div>
             <h3>${esc(r.name)}</h3>
             <div class="muted">${esc(r.description ?? '')}</div>
-            ${r.enabled ? '' : '<div class="prototype-box"><b>RUANGAN TERKUNCI</b>Ruangan ini tidak termasuk paket langganan Anda. Upgrade paket (Phase 4) untuk membukanya.</div>'}
+            ${r.enabled ? '' : '<div class="prototype-box"><b>RUANGAN TERKUNCI</b>Ruangan ini tidak termasuk paket langganan Anda. Upgrade paket untuk membukanya.</div>'}
             ${meeting}
             <div class="section-label">Agent AI (${detail.agents.length})</div>
             ${agents}
+            ${canManage && r.enabled ? `<button class="btn btn--block" data-action="agent-new" data-room="${r.id}">+ Agent baru di ruangan ini</button>` : ''}
             <div class="section-label">Task terbaru</div>
             ${tasks}
-            <div class="prototype-box"><b>PHASE 3 · AI ENGINE</b>Create/Edit Agent, Task Assignment dan Execution History akan aktif di sini.
-                <br><button class="btn" disabled title="Phase 3">+ Agent baru</button><button class="btn" disabled title="Phase 3">Assign task</button></div>
             <button class="btn btn--block" style="margin-top:14px" data-action="office-overview">← Kembali ke denah kantor</button>
         `);
     }
 
-    agentPanel(a, room) {
-        this.showPanel(`
-            <div class="eyebrow">Agent AI</div>
-            <h3>${esc(a.name)}</h3>
-            <div class="muted">${esc(a.job_title)} · ${esc(a.department)}</div>
-            <dl class="kv">
-                <dt>Status</dt><dd>${this.pill(a.status)}</dd>
-                <dt>Ruangan</dt><dd>${esc(room?.data.name ?? 'Belum ditempatkan')}</dd>
-                <dt>Aktif</dt><dd>${a.is_active ? 'Ya' : 'Tidak'}</dd>
-            </dl>
-            ${room ? `<button class="btn btn--block" data-action="room" data-room="${room.data.id}">Buka ${esc(room.data.name)}</button>` : ''}
-            <div class="prototype-box"><b>PHASE 3 · AI ENGINE</b>Konfigurasi model, system prompt, tools, knowledge base dan riwayat eksekusi agent.</div>
-        `);
-    }
-
     agentCard(a) {
-        return `<div class="agent-card"><span class="bot">${initials(a.name)}</span>
-            <div><b>${esc(a.name)}</b><small>${esc(a.job_title)}</small></div>${this.pill(a.status)}</div>`;
+        return `<button class="agent-card agent-card--btn" data-action="agent" data-agent="${a.id}"><span class="bot">${initials(a.name)}</span>
+            <div><b>${esc(a.name)}</b><small>${esc(a.job_title)}</small></div>${this.pill(a.status)}</button>`;
     }
 
     pill(status) {
@@ -630,4 +613,104 @@ export function setUnread(count) {
     if (!el) return;
     el.textContent = count > 9 ? '9+' : String(count);
     el.hidden = count === 0;
+}
+
+// ---------------------------------------------------------------------- AI agents & tasks
+const TASK_COLORS = { queued: '#94a3b8', running: '#38bdf8', waiting: '#fbbf24', completed: '#34d399', failed: '#f87171', cancelled: '#64748b' };
+const TASK_LABEL = { queued: 'antre', running: 'dikerjakan', waiting: 'menunggu tim', completed: 'selesai', failed: 'gagal', cancelled: 'dibatalkan' };
+const taskPill = (s) => `<span class="status-pill" style="--c:${TASK_COLORS[s] || '#94a3b8'}">${esc(TASK_LABEL[s] || s)}</span>`;
+const fmtTokens = (n) => Number(n || 0).toLocaleString('id-ID');
+
+export function taskRow(t) {
+    return `<button class="agent-card agent-card--btn" data-action="task" data-task="${t.id}"><span class="bot">#</span>
+        <div><b>${esc(t.title)}</b><small>${esc([t.agent_name, t.created_at].filter(Boolean).join(' · '))}</small></div>${taskPill(t.status)}</button>`;
+}
+
+export function agentPanelHtml(a, tasks, canManage) {
+    return `
+        <div class="eyebrow">Agent AI · ${esc(a.department)}</div>
+        <h3>${esc(a.name)}</h3>
+        <div class="muted">${esc(a.job_title)}${a.job_description ? ` — ${esc(a.job_description)}` : ''}</div>
+        <dl class="kv">
+            <dt>Status</dt><dd><span class="status-pill" style="--c:${STATUS_COLORS[a.status] || '#94a3b8'}">${esc(a.status)}</span></dd>
+            <dt>Aktif</dt><dd>${a.is_active ? 'Ya' : 'Tidak'}</dd>
+            <dt>Ruangan</dt><dd>${esc(a.room_name ?? 'Belum ditempatkan')}</dd>
+            <dt>Model</dt><dd>${esc(a.model?.name ?? '-')}${a.effort ? ` · effort ${esc(a.effort)}` : ''}</dd>
+            <dt>Token bulan ini</dt><dd>${fmtTokens(a.tokens_used_month)}${a.token_limit_monthly ? ` / ${fmtTokens(a.token_limit_monthly)}` : ''}</dd>
+            ${a.team?.length ? `<dt>Tim</dt><dd>${a.team.map((m) => esc(m.name)).join(', ')}</dd>` : ''}
+        </dl>
+        ${canManage ? `<div class="btn-row">
+            <button class="btn" data-action="agent-edit" data-agent="${a.id}">Edit</button>
+            <button class="btn" data-action="${a.is_active ? 'agent-deactivate' : 'agent-activate'}" data-agent="${a.id}">${a.is_active ? 'Nonaktifkan' : 'Aktifkan'}</button>
+            <button class="btn btn--danger" data-action="agent-delete" data-agent="${a.id}">Hapus</button></div>` : ''}
+        <div class="section-label">Beri tugas</div>
+        ${a.is_active ? `<form class="admin-form" data-form="assign-task" data-agent="${a.id}">
+            <label>Judul<input name="title" required minlength="3" maxlength="200" placeholder="mis. Rencana konten bulan depan"></label>
+            <label>Instruksi<textarea name="instruction" rows="4" required minlength="10" maxlength="20000" placeholder="Jelaskan tujuan, konteks, dan format hasil yang diharapkan."></textarea></label>
+            <label>Prioritas<select name="priority"><option value="normal">Normal</option><option value="high">Tinggi</option><option value="urgent">Mendesak</option><option value="low">Rendah</option></select></label>
+            ${a.team?.length ? '<p class="muted small">Agent ini memimpin tim: ia dapat membagi tugas ke anggota tim lalu menyusun laporan akhir.</p>' : ''}
+            <button class="btn btn--primary" type="submit">Kirim tugas</button></form>`
+            : '<div class="empty">Aktifkan agent untuk memberi tugas.</div>'}
+        <div class="section-label">Riwayat task</div>
+        ${tasks.map(taskRow).join('') || '<div class="empty">Belum ada task.</div>'}`;
+}
+
+export function agentFormHtml(agent, { rooms, models, agents, roomId }) {
+    const v = agent ?? {};
+    const room = agent ? agent.room_id : roomId;
+    const opt = (value, label, selected) => `<option value="${esc(value)}" ${selected ? 'selected' : ''}>${esc(label)}</option>`;
+    return `
+        <div class="eyebrow">${agent ? 'Edit agent' : 'Agent baru'}</div>
+        <h3>${agent ? esc(agent.name) : 'Rekrut Agent AI'}</h3>
+        <form class="admin-form" data-form="agent" data-agent="${agent?.id ?? ''}">
+            <div class="grid-2">
+                <label>Nama<input name="name" required minlength="2" maxlength="100" value="${esc(v.name ?? '')}"></label>
+                <label>Jabatan<input name="job_title" required minlength="2" maxlength="100" value="${esc(v.job_title ?? '')}" placeholder="AI Marketing"></label>
+                <label>Departemen<input name="department" required maxlength="50" value="${esc(v.department ?? '')}"></label>
+                <label>Ruangan<select name="room_id">${opt('', '— belum ditempatkan —', !room)}${rooms.filter((r) => r.enabled).map((r) => opt(r.id, r.name, r.id === room)).join('')}</select></label>
+                <label>Model AI<select name="ai_model_id">${models.map((m) => opt(m.id, m.display_name, Number(m.id) === v.model?.id)).join('')}</select></label>
+                <label>Effort<select name="effort">${['low', 'medium', 'high', 'xhigh', 'max'].map((e) => opt(e, e, e === (v.effort ?? 'medium'))).join('')}</select></label>
+                <label>Manager<select name="manager_agent_id">${opt('', '— tidak ada —', !v.manager_agent_id)}${agents.filter((a) => a.id !== v.id).map((a) => opt(a.id, `${a.name} (${a.job_title})`, a.id === v.manager_agent_id)).join('')}</select></label>
+                <label>Batas token/bulan (0 = paket)<input name="token_limit_monthly" type="number" min="0" step="1000" value="${Number(v.token_limit_monthly ?? 0)}"></label>
+            </div>
+            <label>Deskripsi pekerjaan<textarea name="job_description" rows="2" maxlength="2000">${esc(v.job_description ?? '')}</textarea></label>
+            <label>System prompt<textarea name="system_prompt" rows="6" maxlength="20000" placeholder="Peran, tanggung jawab, gaya bahasa, batasan.">${esc(v.system_prompt ?? '')}</textarea></label>
+            <p class="muted small">Agent baru dibuat dalam keadaan nonaktif. Effort lebih tinggi = jawaban lebih mendalam, token lebih banyak.</p>
+            <div class="form-error" hidden></div>
+            <button class="btn btn--primary" type="submit">${agent ? 'Simpan perubahan' : 'Buat agent'}</button>
+        </form>`;
+}
+
+export function taskPanelHtml(d) {
+    const t = d.task;
+    const logs = d.logs.map((l) => `<li class="log log--${esc(l.level)}"><b>${esc(l.event)}</b> ${esc(l.message)}
+        ${Number(l.input_tokens) + Number(l.output_tokens) ? `<small>${fmtTokens(Number(l.input_tokens) + Number(l.output_tokens))} token · ${Number(l.duration_ms)} ms</small>` : ''}<small>${esc(l.created_at)}</small></li>`).join('');
+    return `
+        <div class="eyebrow">Task #${t.id}${t.parent_task_id ? ` · sub-tugas dari #${t.parent_task_id}` : ''}</div>
+        <h3>${esc(t.title)}</h3>
+        <dl class="kv">
+            <dt>Agent</dt><dd>${esc(t.agent_name ?? '-')}</dd>
+            <dt>Status</dt><dd id="task-status">${taskPill(t.status)}</dd>
+            <dt>Prioritas</dt><dd>${esc(t.priority)}</dd>
+            <dt>Token</dt><dd>${fmtTokens(Number(t.input_tokens) + Number(t.output_tokens))}</dd>
+            ${t.completed_at ? `<dt>Selesai</dt><dd>${esc(t.completed_at)}</dd>` : ''}
+        </dl>
+        ${t.parent_task_id ? `<button class="btn" data-action="task" data-task="${t.parent_task_id}">← Task induk</button>` : ''}
+        <div class="section-label">Instruksi</div>
+        <div class="task-text">${esc(t.instruction)}</div>
+        ${t.status === 'completed' ? `<div class="section-label">Hasil</div><div class="task-text task-text--result">${esc(t.result)}</div>` : ''}
+        ${t.error_message ? `<div class="prototype-box"><b>${t.status === 'queued' ? 'AKAN DICOBA LAGI' : 'TIDAK SELESAI'}</b>${esc(t.error_message)}</div>` : ''}
+        ${d.children.length ? `<div class="section-label">Didelegasikan ke tim (${d.children.length})</div>${d.children.map((c) => taskRow(c)).join('')}` : ''}
+        <div class="section-label">Riwayat eksekusi</div>
+        <ol class="logs">${logs || '<li class="log">Belum ada aktivitas.</li>'}</ol>
+        ${['queued', 'waiting'].includes(t.status) ? `<button class="btn btn--danger btn--block" data-action="task-cancel" data-task="${t.id}">Batalkan task</button>` : ''}
+        ${['queued', 'running', 'waiting'].includes(t.status) ? '<p class="muted small">Diperbarui otomatis. Task diproses oleh worker <code>agents:work</code> di server.</p>' : ''}`;
+}
+
+export function tasksPanelHtml(tasks) {
+    return `
+        <div class="eyebrow">Kantor Anda</div>
+        <h3>Task Monitoring</h3>
+        <div class="muted">Task terbaru yang diberikan kepada Agent AI (tanpa sub-tugas delegasi).</div>
+        ${tasks.map(taskRow).join('') || '<div class="empty">Belum ada task. Buka agent lalu beri tugas.</div>'}`;
 }

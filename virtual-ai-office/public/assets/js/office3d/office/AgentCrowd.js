@@ -68,6 +68,16 @@ export class AgentCrowd {
         if (this.visors.instanceColor) this.visors.instanceColor.needsUpdate = true;
     }
 
+    /** Apply live statuses from the server (unknown ids are ignored). */
+    updateStatuses(list) {
+        const byId = new Map(list.map((a) => [a.id, a.status]));
+        this.actors.forEach((a) => {
+            if (a.guest || !byId.has(a.agent.id) || byId.get(a.agent.id) === a.agent.status) return;
+            a.agent.status = byId.get(a.agent.id);
+            this.setColor(a.index, a.agent.status);
+        });
+    }
+
     actorFromHit(hit) {
         if (hit.object !== this.bodies && hit.object !== this.heads) return null;
         const a = this.actors[hit.instanceId];

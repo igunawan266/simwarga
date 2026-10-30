@@ -45,6 +45,23 @@ export const api = {
     renewSubscription: () => request('POST', 'office/subscription/renew'),
     notifications: () => request('GET', 'office/notifications'),
     markNotificationsRead: () => request('POST', 'office/notifications/read'),
+    agents: {
+        list: () => request('GET', 'office/agents'),
+        get: (id) => request('GET', `office/agents/${Number(id)}`),
+        models: () => request('GET', 'office/ai-models'),
+        live: () => request('GET', 'office/agents/live'),
+        create: (data) => request('POST', 'office/agents', data),
+        update: (id, data) => request('PATCH', `office/agents/${Number(id)}`, data),
+        remove: (id) => request('DELETE', `office/agents/${Number(id)}`),
+        activate: (id) => request('POST', `office/agents/${Number(id)}/activate`),
+        deactivate: (id) => request('POST', `office/agents/${Number(id)}/deactivate`),
+        assign: (id, data) => request('POST', `office/agents/${Number(id)}/tasks`, data),
+    },
+    tasks: {
+        list: (params = {}) => request('GET', `office/tasks?${new URLSearchParams(params)}`),
+        get: (id) => request('GET', `office/tasks/${Number(id)}`),
+        cancel: (id) => request('POST', `office/tasks/${Number(id)}/cancel`),
+    },
     payments: {
         channels: (invoiceId) => request('GET', `office/invoices/${Number(invoiceId)}/channels`),
         pay: (invoiceId, method) => request('POST', `office/invoices/${Number(invoiceId)}/pay`, { method }),

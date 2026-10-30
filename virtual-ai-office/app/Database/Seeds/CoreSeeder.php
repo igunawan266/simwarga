@@ -116,10 +116,11 @@ class CoreSeeder extends Seeder
         }
 
         // Pricing columns are left at 0: Super Admin fills them from the provider's current price list.
+        // Claude Opus 5.5 is the default (Config\Ai::$defaultModel); tenants may pick another per agent.
         $models = [
-            ['anthropic', 'claude-sonnet-5-5', 'Claude Sonnet 5.5', 200000],
-            ['anthropic', 'claude-haiku-5-5', 'Claude Haiku 5.5', 200000],
-            ['anthropic', 'claude-opus-5-5', 'Claude Opus 5.5', 200000],
+            ['anthropic', 'claude-opus-5-5', 'Claude Opus 5.5', 1000000],
+            ['anthropic', 'claude-sonnet-5-5', 'Claude Sonnet 5.5', 1000000],
+            ['anthropic', 'claude-haiku-5-5', 'Claude Haiku 5.5', 1000000],
         ];
         foreach ($models as [$provider, $key, $display, $ctx]) {
             $this->upsert('ai_models', ['provider' => $provider, 'model_key' => $key], [
