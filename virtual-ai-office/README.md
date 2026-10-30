@@ -1,0 +1,85 @@
+# Virtual AI Office
+
+Gedung perkantoran virtual 3D berbasis web — platform SaaS multi-tenant tempat perusahaan
+menyewa kantor virtual dan mempekerjakan **Agent AI** sebagai karyawan digital.
+
+**Stack:** CodeIgniter 4.7 · PHP 8.2+ (kompatibel 8.5) · MySQL/MariaDB · Three.js r170 · GSAP 3 · Vanilla JS/CSS
+
+> Status saat ini: **Phase 1 (visual prototype) selesai** + fondasi Phase 2
+> (auth, isolasi multi-tenant, RBAC, skema database lengkap). Lihat [docs/ROADMAP.md](docs/ROADMAP.md).
+
+## Menjalankan secara lokal
+
+```bash
+cd virtual-ai-office
+composer install
+cp .env.example .env
+```
+
+Untuk mencoba cepat tanpa MySQL, ubah di `.env`:
+
+```ini
+CI_ENVIRONMENT = development
+app.baseURL = 'http://localhost:8080/'
+database.default.DBDriver = SQLite3
+database.default.database = office.db
+database.default.foreignKeys = true
+```
+
+```bash
+php spark migrate
+php spark db:seed DatabaseSeeder
+php spark serve
+```
+
+Buka http://localhost:8080.
+
+### Akun demo (dibuat oleh `DemoSeeder`, tidak pernah di production)
+
+| Email | Password | Peran |
+|---|---|---|
+| `owner@demo.test` | `DemoOffice#2026` | Tenant Owner — Nusantara Digital Group, lantai 7 (kantor lengkap, 16 agent) |
+| `staff@demo.test` | `DemoOffice#2026` | Tenant Staff — Nusantara Digital Group |
+| `owner2@demo.test` | `DemoOffice#2026` | Tenant Owner — Arunika Logistics, lantai 3 |
+| `admin@demo.test` | `DemoOffice#2026` | Super Admin (belum punya console; Phase 5) |
+
+Data demo memakai langganan **trial**; tidak ada invoice atau pembayaran palsu yang di-seed.
+
+## Yang bisa dicoba
+
+1. **Explore Building** — putar/zoom gedung, hover lantai untuk melihat tenant, klik untuk detail.
+2. **Back to Lobby** — masuk lobby: resepsionis AI dan building directory dari database.
+3. **Login** → elevator turun, pintu terbuka, naik ke lantai tenant, lantai di atasnya di-fade,
+   kamera masuk ke denah kantor.
+4. Klik ruangan (di scene atau daftar) → detail ruangan, agent, task (data dari API ter-scope tenant).
+5. Klik robot agent → profil agent. Meeting Room → **Simulasikan rapat** (simulasi visual).
+6. Ruangan yang tidak termasuk paket tampil **terkunci** (mis. login `owner2@demo.test`, paket Business).
+
+Tombol fitur fase berikutnya ditampilkan non-aktif dengan label **PHASE n / PROTOTYPE**.
+
+## Tes
+
+```bash
+vendor/bin/phpunit
+```
+
+`tests/Feature/TenantIsolationTest.php` dan `tests/Unit/TenantScopedModelTest.php` membuktikan
+tenant tidak bisa membaca/mengubah data tenant lain (URL dimanipulasi, session dipalsukan,
+update `tenant_id`, delete lintas tenant).
+
+## Dokumentasi
+
+- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — arsitektur, struktur folder, multi-tenancy, keamanan, 3D
+- [docs/DATABASE.md](docs/DATABASE.md) — skema 26 tabel + ERD
+- [docs/ROADMAP.md](docs/ROADMAP.md) — status per phase
+
+## API (v1)
+
+| Method | Endpoint | Akses |
+|---|---|---|
+| GET | `/api/v1/building` | publik — directory gedung (field aman saja) |
+| GET | `/api/v1/session` | publik — status login |
+| POST | `/api/v1/session/login` | publik, CSRF, 5/menit |
+| POST | `/api/v1/session/logout` | CSRF |
+| GET | `/api/v1/office` | auth + tenant — kantor, ruangan, agent, langganan |
+| GET | `/api/v1/office/rooms/{id}` | auth + tenant — detail ruangan (404 untuk milik tenant lain) |
