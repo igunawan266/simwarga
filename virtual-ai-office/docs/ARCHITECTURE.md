@@ -90,6 +90,11 @@ Diverifikasi oleh `tests/Feature/TenantIsolationTest.php` dan `tests/Unit/Tenant
 | `tenant_owner`, `tenant_admin`, `tenant_staff` | tenant | `tenant_members.role_id` |
 | `ai_agent` | tenant | dipakai saat agent bertindak (audit `agent_id`) |
 
+Aturan anggota (`MemberService`): Owner mengelola semua peran, Admin hanya Staff, Staff hanya
+melihat; tidak ada yang bisa mengubah/menghapus keanggotaannya sendiri; tenant selalu memiliki
+minimal satu Owner aktif. User undangan dibuat berstatus `invited` (tidak bisa login) sampai
+undangan diterima.
+
 Pemakaian di route: `['filter' => ['auth', 'tenant', 'role:tenant_owner,tenant_admin']]`
 atau `role:super_admin`.
 

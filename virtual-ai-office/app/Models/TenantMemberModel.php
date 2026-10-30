@@ -13,7 +13,7 @@ class TenantMemberModel extends Model
     protected $table         = 'tenant_members';
     protected $returnType    = 'array';
     protected $useTimestamps = true;
-    protected $allowedFields = ['tenant_id', 'user_id', 'role_id', 'status', 'joined_at'];
+    protected $allowedFields = ['tenant_id', 'user_id', 'role_id', 'status', 'joined_at', 'invited_by', 'invite_token_hash', 'invite_expires_at'];
 
     /** Active memberships of a user in active tenants, with the tenant role slug. */
     public function activeMembershipsFor(int $userId): array

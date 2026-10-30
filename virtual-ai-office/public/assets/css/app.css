@@ -262,3 +262,34 @@ button { font: inherit; color: inherit; }
 .small { font-size: 11px; margin: 6px 0 0; }
 .info-panel--wide { width: 420px; }
 @media (max-width: 820px) { .info-panel--wide { width: auto; } .session .btn[data-action="admin-plans"] { display: none; } }
+
+/* ---------- Standalone pages (invitation) ---------- */
+.page-center { position: fixed; inset: 0; display: grid; place-items: center; padding: 16px; overflow-y: auto; }
+.page-center .modal__card { position: relative; z-index: 1; }
+.page-center label { display: block; font-size: 12px; color: var(--silver); margin-bottom: 14px; }
+.page-center input { display: block; width: 100%; margin-top: 6px; padding: 11px 12px; border-radius: 10px; border: 1px solid var(--line); background: rgba(255,255,255,.04); color: var(--white); font: inherit; }
+.page-center input:focus { outline: none; border-color: var(--cyan); box-shadow: 0 0 0 3px rgba(34,211,238,.18); }
+.page-center h2 { font: 600 22px/1.25 var(--display); margin: 8px 0 8px; }
+.page-center p { font-size: 13px; margin: 0 0 16px; }
+.page-center a.btn { display: block; text-align: center; text-decoration: none; }
+.page-backdrop {
+    position: fixed; inset: 0;
+    background:
+        radial-gradient(ellipse at 50% 120%, rgba(34,211,238,.18), transparent 60%),
+        repeating-linear-gradient(90deg, rgba(192,200,212,.05) 0 1px, transparent 1px 64px),
+        repeating-linear-gradient(0deg, rgba(192,200,212,.05) 0 1px, transparent 1px 64px),
+        linear-gradient(180deg, var(--navy-950), var(--navy-800));
+}
+
+/* ---------- Team & access ---------- */
+.office-hud__team { margin-top: 10px; }
+.member-row { margin-bottom: 8px; }
+.member-row .agent-card { margin-bottom: 0; }
+.member-row__form { display: flex; flex-wrap: wrap; gap: 6px; padding: 8px 9px 4px; }
+.member-row__form select { padding: 6px 8px; border-radius: 8px; border: 1px solid var(--line); background: rgba(255,255,255,.04); color: var(--white); font: inherit; font-size: 12px; }
+.member-row__form select option { background: var(--navy-900); }
+.member-row__form .btn { padding: 6px 10px; font-size: 12px; }
+.invite-link { margin: 10px 0 14px; padding: 12px; border-radius: 10px; background: rgba(34,211,238,.08); border: 1px solid rgba(34,211,238,.4); display: grid; gap: 8px; font-size: 12px; }
+.invite-link code { word-break: break-all; color: var(--cyan); font-size: 11px; }
+.invite-link small { color: var(--muted); }
+.invite-link .btn { justify-self: start; padding: 6px 12px; font-size: 12px; }

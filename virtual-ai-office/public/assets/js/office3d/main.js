@@ -5,7 +5,7 @@ import { api, ApiError } from './core/api.js';
 import { DIM, floorY, floorHeight } from './core/config.js';
 import { Building } from './building/Building.js';
 import { Elevator } from './building/Elevator.js';
-import { Hud, esc, adminFloorHtml, plansPanelHtml } from './ui/Hud.js';
+import { Hud, esc, adminFloorHtml, plansPanelHtml, teamPanelHtml } from './ui/Hud.js';
 
 /**
  * Application controller / state machine.
@@ -52,6 +52,13 @@ class App {
                 const tenant = await api.admin.createTenant(v);
                 return api.admin.assignOffice(f.dataset.office, tenant.id);
             }, 'Tenant dibuat dan kantor disewakan.', true),
+            // Team & access
+            team: () => this.openTeam(),
+            copy: (d) => navigator.clipboard?.writeText(d.text).then(() => this.hud.toast('Tautan disalin.'), () => this.hud.toast('Salin manual tautan di atas.', 'error')),
+            'form:invite': (v, f) => this.memberAction(f.dataset, (scope, tid) => (scope === 'admin' ? api.admin.inviteMember(tid, v) : api.members.invite(v)), 'Undangan dibuat.'),
+            'form:member': (v, f) => this.memberAction(f.dataset, (scope, tid) => (scope === 'admin' ? api.admin.updateMember(tid, f.dataset.member, v) : api.members.update(f.dataset.member, v)), 'Anggota diperbarui.'),
+            'member-reinvite': (d) => this.memberAction(d, (scope, tid) => (scope === 'admin' ? api.admin.reinviteMember(tid, d.member) : api.members.reinvite(d.member)), 'Tautan undangan baru dibuat.'),
+            'member-remove': (d, el) => this.confirmTwice(el, () => this.memberAction(d, (scope, tid) => (scope === 'admin' ? api.admin.removeMember(tid, d.member) : api.members.remove(d.member)), 'Anggota dihapus.')),
             'form:plan': (v, f) => this.adminSave(
                 () => api.admin.updatePlan(f.dataset.plan, { ...v, is_active: v.is_active ? 1 : 0, is_custom: v.is_custom ? 1 : 0 }),
                 'Paket disimpan.',
@@ -96,6 +103,13 @@ class App {
         this.hud.hideLoader();
         this.hud.breadcrumb([directory.building.name, 'Explore Building']);
         await this.camera.flyTo([95, 62, 120], [0, 26, 0], { duration: 3.2, ease: 'power2.out', limits: { min: 45, max: 320 } });
+
+        // Just accepted an invitation: welcome the new member and take them up to their office.
+        if (new URLSearchParams(location.search).has('welcome') && this.session?.tenant?.office) {
+            history.replaceState(null, '', location.pathname);
+            this.hud.toast(`Selamat bergabung di ${this.session.tenant.name}!`);
+            this.enterOffice();
+        }
     }
 
     isSuperAdmin() {
@@ -103,7 +117,7 @@ class App {
     }
 
     // ---------------------------------------------------------------- super admin
-    async loadAdminFloor(n) {
+    async loadAdminFloor(n, inviteUrl = null) {
         const slot = document.getElementById('admin-floor');
         if (!slot) return;
         slot.innerHTML = '<div class="empty">Memuat data admin…</div>';
@@ -112,7 +126,7 @@ class App {
             const row = floors.find((r) => r.floor.number === n);
             const detail = row?.tenant ? await api.admin.tenant(row.tenant.id) : null;
             if (this.selectedFloor !== n) return; // user moved on
-            document.getElementById('admin-floor').innerHTML = adminFloorHtml(row, tenants, detail);
+            document.getElementById('admin-floor').innerHTML = adminFloorHtml(row, tenants, detail, inviteUrl);
         } catch (e) {
             slot.innerHTML = `<div class="empty">${esc(e.message)}</div>`;
         }
@@ -130,16 +144,49 @@ class App {
         }
     }
 
-    /** Two-step confirm: first click arms the button, second click within 4 s releases the office. */
-    async adminRelease(officeId, el) {
+    /** Two-step confirm: the first click arms the button, a second click within 4 s runs fn. */
+    confirmTwice(el, fn) {
         if (!el.classList.contains('is-armed')) {
             el.classList.add('is-armed');
             el.dataset.label = el.textContent;
-            el.textContent = 'Klik sekali lagi untuk konfirmasi';
+            el.textContent = 'Klik lagi untuk konfirmasi';
             setTimeout(() => { el.classList.remove('is-armed'); el.textContent = el.dataset.label; }, 4000);
             return;
         }
-        await this.adminSave(() => api.admin.releaseOffice(officeId), 'Kantor dikosongkan.', true);
+        fn();
+    }
+
+    adminRelease(officeId, el) {
+        this.confirmTwice(el, () => this.adminSave(() => api.admin.releaseOffice(officeId), 'Kantor dikosongkan.', true));
+    }
+
+    // ---------------------------------------------------------------- team & access
+    async openTeam(inviteUrl = null) {
+        try {
+            const data = await api.members.list();
+            this.hud.showPanel(teamPanelHtml(data, inviteUrl));
+            document.getElementById('info-panel').classList.add('info-panel--wide');
+        } catch (e) {
+            this.hud.toast(e.message, 'error');
+        }
+    }
+
+    /** Run a member mutation for the office team or (Super Admin) a tenant, then refresh that view. */
+    async memberAction({ scope, tenant }, fn, message) {
+        let result;
+        try {
+            result = await fn(scope, tenant);
+        } catch (e) {
+            this.hud.toast(e.message, 'error', 5000);
+            return;
+        }
+        this.hud.toast(message);
+        const inviteUrl = result?.invite_url ?? null;
+        if (scope === 'admin') {
+            await this.loadAdminFloor(this.selectedFloor, inviteUrl);
+        } else {
+            await this.openTeam(inviteUrl);
+        }
     }
 
     /** Run an admin mutation; on success optionally rebuild the building from fresh directory data. */

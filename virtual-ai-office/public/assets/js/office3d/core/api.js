@@ -37,7 +37,18 @@ export const api = {
     logout: () => request('POST', 'session/logout'),
     office: () => request('GET', 'office'),
     room: (id) => request('GET', `office/rooms/${encodeURIComponent(id)}`),
+    members: {
+        list: () => request('GET', 'office/members'),
+        invite: (data) => request('POST', 'office/members', data),
+        update: (id, data) => request('PATCH', `office/members/${Number(id)}`, data),
+        remove: (id) => request('DELETE', `office/members/${Number(id)}`),
+        reinvite: (id) => request('POST', `office/members/${Number(id)}/reinvite`),
+    },
     admin: {
+        inviteMember: (tid, data) => request('POST', `admin/tenants/${Number(tid)}/members`, data),
+        updateMember: (tid, id, data) => request('PATCH', `admin/tenants/${Number(tid)}/members/${Number(id)}`, data),
+        removeMember: (tid, id) => request('DELETE', `admin/tenants/${Number(tid)}/members/${Number(id)}`),
+        reinviteMember: (tid, id) => request('POST', `admin/tenants/${Number(tid)}/members/${Number(id)}/reinvite`),
         floors: () => request('GET', 'admin/floors'),
         tenants: () => request('GET', 'admin/tenants'),
         tenant: (id) => request('GET', `admin/tenants/${Number(id)}`),

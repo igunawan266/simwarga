@@ -55,7 +55,9 @@ Data demo memakai langganan **trial**; tidak ada invoice atau pembayaran palsu y
 5. Klik robot agent → profil agent. Meeting Room → **Simulasikan rapat** (simulasi visual).
 6. Ruangan yang tidak termasuk paket tampil **terkunci** (mis. login `owner2@demo.test`, paket Business).
 7. Login sebagai `admin@demo.test` → klik lantai mana pun untuk panel **Super Admin**
-   (sewakan/kosongkan kantor, buat tenant, status tenant, harga kantor) dan tombol **Kelola Paket**.
+   (sewakan/kosongkan kantor, buat tenant, status tenant, harga kantor, undang Owner) dan tombol **Kelola Paket**.
+8. Di kantor, tombol **Tim & Akses** → undang anggota, salin tautan, buka di browser lain untuk
+   bergabung — anggota baru langsung dibawa elevator ke kantornya.
 
 Tombol fitur fase berikutnya ditampilkan non-aktif dengan label **PHASE n / PROTOTYPE**.
 
@@ -85,6 +87,11 @@ update `tenant_id`, delete lintas tenant).
 | POST | `/api/v1/session/logout` | CSRF |
 | GET | `/api/v1/office` | auth + tenant — kantor, ruangan, agent, langganan |
 | GET | `/api/v1/office/rooms/{id}` | auth + tenant — detail ruangan (404 untuk milik tenant lain) |
+| GET | `/api/v1/office/members` | auth + tenant — daftar anggota |
+| POST | `/api/v1/office/members` | owner/admin — undang (`email`, `role`) → `invite_url` |
+| PATCH / DELETE | `/api/v1/office/members/{id}` | owner/admin — ubah peran/status, hapus |
+| POST | `/api/v1/office/members/{id}/reinvite` | owner/admin — tautan undangan baru |
+| GET / POST | `/invite/{token}` | publik (rate limit) — halaman terima undangan |
 | GET | `/api/v1/admin/floors` | super_admin — lantai, kantor, penyewa |
 | PATCH | `/api/v1/admin/offices/{id}` | super_admin — harga / status kantor |
 | POST | `/api/v1/admin/offices/{id}/assign` | super_admin — sewakan kantor ke tenant (`tenant_id`) |
@@ -93,3 +100,4 @@ update `tenant_id`, delete lintas tenant).
 | GET/PATCH | `/api/v1/admin/tenants/{id}` | super_admin — detail / ubah tenant |
 | GET/POST | `/api/v1/admin/plans` | super_admin — daftar / buat paket |
 | PATCH | `/api/v1/admin/plans/{id}` | super_admin — ubah harga & limit paket |
+| POST / PATCH / DELETE | `/api/v1/admin/tenants/{id}/members[/{member}]` | super_admin — kelola anggota tenant mana pun |

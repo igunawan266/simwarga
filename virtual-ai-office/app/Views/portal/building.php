@@ -60,6 +60,7 @@
         </div>
         <div class="stat-row" id="office-stats"></div>
         <div class="room-chips" id="room-chips"></div>
+        <button class="btn btn--block office-hud__team" data-action="team">Tim &amp; Akses</button>
     </section>
 
     <!-- Hover tooltip -->

@@ -283,7 +283,7 @@ export { esc };
 const rupiah = (n) => `Rp ${Number(n || 0).toLocaleString('id-ID')}`;
 
 /** Admin section rendered inside the floor panel. */
-export function adminFloorHtml(row, tenants, detail) {
+export function adminFloorHtml(row, tenants, detail, inviteUrl = null) {
     const o = row.office;
     if (!o) return '';
     const officeForm = `
@@ -309,7 +309,7 @@ export function adminFloorHtml(row, tenants, detail) {
                 <dt>Anggota</dt><dd>${detail.members.length}</dd>
                 <dt>Sewa</dt><dd>${rupiah(o.monthly_price)}</dd>
             </dl>
-            ${detail.members.map((m) => `<div class="agent-card"><span class="bot">${initials(m.name)}</span><div><b>${esc(m.name)}</b><small>${esc(m.email)}</small></div><span class="status-pill" style="--c:#94a3b8">${esc(m.role.replace('tenant_', ''))}</span></div>`).join('')}
+            ${membersHtml(detail.members, { actorRole: 'super_admin', myUserId: null, scope: 'admin', tenantId: detail.tenant.id, inviteUrl })}
             <form class="admin-form" data-form="tenant-status" data-tenant="${detail.tenant.id}">
                 <label>Ubah status tenant<select name="status">
                     ${['pending', 'active', 'suspended', 'expired'].map((st) => `<option value="${st}" ${detail.tenant.status === st ? 'selected' : ''}>${st}</option>`).join('')}
@@ -369,4 +369,77 @@ export function plansPanelHtml(plans) {
                 <button class="btn" type="submit">Simpan ${esc(p.code)}</button>
             </form>`).join('')}
     `;
+}
+
+// ---------------------------------------------------------------------- team / members
+const ROLE_LABEL = { tenant_owner: 'Owner', tenant_admin: 'Admin', tenant_staff: 'Staff' };
+const STATUS_COLOR = { active: '#22d3ee', invited: '#fbbf24', disabled: '#64748b' };
+
+/** Mirrors MemberService rules so the UI only offers actions the server will accept. */
+function canManage(actorRole, myUserId, member) {
+    if (actorRole === 'super_admin') return true;
+    if (member.user_id === myUserId) return false;
+    if (actorRole === 'tenant_owner') return true;
+    return actorRole === 'tenant_admin' && member.role === 'tenant_staff';
+}
+
+function inviteRoles(actorRole) {
+    if (actorRole === 'super_admin' || actorRole === 'tenant_owner') return ['tenant_owner', 'tenant_admin', 'tenant_staff'];
+    return actorRole === 'tenant_admin' ? ['tenant_staff'] : [];
+}
+
+/**
+ * Members list + invite form. ctx = { actorRole, myUserId, scope: 'office'|'admin', tenantId, inviteUrl }
+ */
+export function membersHtml(members, ctx) {
+    const attrs = `data-scope="${ctx.scope}" data-tenant="${ctx.tenantId ?? ''}"`;
+    const rows = members.map((m) => {
+        const editable = canManage(ctx.actorRole, ctx.myUserId, m);
+        const roles = inviteRoles(ctx.actorRole);
+        const controls = !editable ? '' : `
+            <form class="member-row__form" data-form="member" data-member="${m.id}" ${attrs}>
+                <select name="role" aria-label="Peran ${esc(m.name)}">
+                    ${(roles.includes(m.role) ? roles : [m.role, ...roles]).map((r) => `<option value="${r}" ${r === m.role ? 'selected' : ''}>${ROLE_LABEL[r]}</option>`).join('')}
+                </select>
+                ${m.status === 'invited' ? '' : `<select name="status" aria-label="Status ${esc(m.name)}">
+                    <option value="active" ${m.status === 'active' ? 'selected' : ''}>Aktif</option>
+                    <option value="disabled" ${m.status === 'disabled' ? 'selected' : ''}>Nonaktif</option></select>`}
+                <button class="btn" type="submit">Simpan</button>
+                ${m.status === 'invited' ? `<button class="btn" type="button" data-action="member-reinvite" data-member="${m.id}" ${attrs}>Tautan baru</button>` : ''}
+                <button class="btn btn--danger" type="button" data-action="member-remove" data-member="${m.id}" ${attrs}>Hapus</button>
+            </form>`;
+        return `<div class="member-row">
+            <div class="agent-card"><span class="bot">${initials(m.name)}</span>
+                <div><b>${esc(m.name)}${m.user_id === ctx.myUserId ? ' (Anda)' : ''}</b><small>${esc(m.email)}</small></div>
+                <span class="status-pill" style="--c:${STATUS_COLOR[m.status] || '#94a3b8'}">${esc(ROLE_LABEL[m.role] || m.role)}${m.status === 'active' ? '' : ` · ${esc(m.status)}`}</span>
+            </div>${controls}</div>`;
+    }).join('') || '<div class="empty">Belum ada anggota. Undang Owner pertama tenant ini.</div>';
+
+    const roles = inviteRoles(ctx.actorRole);
+    const invite = !roles.length ? '<p class="muted small">Hanya Owner dan Admin yang dapat mengundang anggota.</p>' : `
+        <form class="admin-form" data-form="invite" ${attrs}>
+            <div class="grid-2">
+                <label>Email<input name="email" type="email" required maxlength="191" placeholder="nama@perusahaan.com"></label>
+                <label>Peran<select name="role">${roles.map((r) => `<option value="${r}" ${r === 'tenant_staff' ? 'selected' : ''}>${ROLE_LABEL[r]}</option>`).join('')}</select></label>
+            </div>
+            <button class="btn btn--primary" type="submit">Buat undangan</button>
+        </form>`;
+
+    const link = !ctx.inviteUrl ? '' : `
+        <div class="invite-link">
+            <b>Tautan undangan (berlaku 7 hari, sekali pakai)</b>
+            <code>${esc(ctx.inviteUrl)}</code>
+            <button class="btn" data-action="copy" data-text="${esc(ctx.inviteUrl)}">Salin tautan</button>
+            <small>Kirimkan tautan ini ke anggota. Tautan hanya ditampilkan sekali; buat "Tautan baru" bila hilang. Pengiriman email otomatis belum tersedia (butuh konfigurasi SMTP).</small>
+        </div>`;
+
+    return `<div class="section-label">Tim &amp; Akses (${members.length})</div>${link}${rows}${invite}`;
+}
+
+export function teamPanelHtml(data, inviteUrl) {
+    return `
+        <div class="eyebrow">Kantor Anda</div>
+        <h3>Tim &amp; Akses</h3>
+        <div class="muted">Anggota login dengan akun masing-masing dan hanya melihat data tenant ini. Owner mengelola semua peran; Admin mengelola Staff.</div>
+        ${membersHtml(data.members, { actorRole: data.my_role, myUserId: data.my_user_id, scope: 'office', inviteUrl })}`;
 }

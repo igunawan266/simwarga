@@ -4,6 +4,8 @@ use CodeIgniter\Router\RouteCollection;
 
 /** @var RouteCollection $routes */
 $routes->get('/', 'PortalController::index');
+$routes->get('invite/(:segment)', 'InvitationController::show/$1', ['filter' => 'throttle:invite,30,60']);
+$routes->post('invite/(:segment)', 'InvitationController::accept/$1', ['filter' => 'throttle:invite_post,10,60']);
 
 $routes->group('api/v1', ['namespace' => 'App\Controllers\Api\V1', 'filter' => 'throttle:api,120,60'], static function (RouteCollection $routes) {
     // Public
@@ -16,6 +18,14 @@ $routes->group('api/v1', ['namespace' => 'App\Controllers\Api\V1', 'filter' => '
     $routes->group('office', ['filter' => ['auth', 'tenant']], static function (RouteCollection $routes) {
         $routes->get('/', 'OfficeController::show');
         $routes->get('rooms/(:num)', 'OfficeController::room/$1');
+
+        $routes->get('members', 'MembersController::index');
+        $routes->group('members', ['filter' => 'role:tenant_owner,tenant_admin'], static function (RouteCollection $routes) {
+            $routes->post('/', 'MembersController::invite');
+            $routes->patch('(:num)', 'MembersController::update/$1');
+            $routes->delete('(:num)', 'MembersController::remove/$1');
+            $routes->post('(:num)/reinvite', 'MembersController::reinvite/$1');
+        });
     });
 
     // Super Admin (platform role, cross-tenant by design)
@@ -29,6 +39,10 @@ $routes->group('api/v1', ['namespace' => 'App\Controllers\Api\V1', 'filter' => '
         $routes->post('tenants', 'TenantsController::create');
         $routes->get('tenants/(:num)', 'TenantsController::show/$1');
         $routes->patch('tenants/(:num)', 'TenantsController::update/$1');
+        $routes->post('tenants/(:num)/members', 'TenantMembersController::inviteFor/$1');
+        $routes->patch('tenants/(:num)/members/(:num)', 'TenantMembersController::updateFor/$1/$2');
+        $routes->delete('tenants/(:num)/members/(:num)', 'TenantMembersController::removeFor/$1/$2');
+        $routes->post('tenants/(:num)/members/(:num)/reinvite', 'TenantMembersController::reinviteFor/$1/$2');
 
         $routes->get('plans', 'PlansController::index');
         $routes->post('plans', 'PlansController::create');

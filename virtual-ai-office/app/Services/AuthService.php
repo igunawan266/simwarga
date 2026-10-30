@@ -41,25 +41,30 @@ class AuthService
         }
 
         $memberships = $this->members->activeMembershipsFor((int) $user['id']);
+        $this->startSession((int) $user['id'], isset($memberships[0]) ? (int) $memberships[0]['tenant_id'] : null);
 
+        return ['user' => $user, 'memberships' => $memberships];
+    }
+
+    /**
+     * Establish a fresh authenticated session (also used right after accepting an invitation).
+     * The caller must already have verified the user's credentials.
+     */
+    public function startSession(int $userId, ?int $tenantId): void
+    {
         $session = session();
         $session->regenerate(true); // prevent session fixation
         $session->set([
-            'user_id'          => (int) $user['id'],
-            'active_tenant_id' => $memberships[0]['tenant_id'] ?? null,
+            'user_id'          => $userId,
+            'active_tenant_id' => $tenantId,
             'logged_in_at'     => time(),
         ]);
 
-        $this->users->update($user['id'], [
+        $this->users->update($userId, [
             'last_login_at' => date('Y-m-d H:i:s'),
             'last_login_ip' => Services::request()->getIPAddress(),
         ]);
-        Services::auditLogger()->record('auth.login', [
-            'user_id'   => (int) $user['id'],
-            'tenant_id' => $memberships[0]['tenant_id'] ?? null,
-        ]);
-
-        return ['user' => $user, 'memberships' => $memberships];
+        Services::auditLogger()->record('auth.login', ['user_id' => $userId, 'tenant_id' => $tenantId]);
     }
 
     public function logout(): void

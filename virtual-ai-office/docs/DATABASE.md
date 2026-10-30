@@ -52,7 +52,7 @@ erDiagram
 | `roles` | `slug` unik, `scope` platform/tenant, `permissions` JSON |
 | `users` | `email` unik, FK `role_id`, soft delete, `last_login_at/ip` |
 | `tenants` | `uuid` & `slug` unik, `status` (pending/active/suspended/expired), `is_listed` (tampil di directory gedung), soft delete |
-| `tenant_members` | unik `(tenant_id, user_id)`, FK ke tenants/users/roles |
+| `tenant_members` | unik `(tenant_id, user_id)`, FK ke tenants/users/roles; `status` invited/active/disabled; `invite_token_hash` (unik, SHA-256 — token mentah tidak pernah disimpan), `invite_expires_at`, `invited_by` (migrasi `000007`) |
 
 ### Gedung (`000002`)
 | Tabel | Catatan |

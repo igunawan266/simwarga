@@ -52,9 +52,7 @@ class TenantAdminService
             ->join('room_types rt', 'rt.id = r.room_type_id')->where('r.tenant_id', $id)->orderBy('r.sort_order')->get()->getResultArray();
         $agents = $db->table('ai_agents')->select('id, name, job_title, department, status, room_id, tokens_used_month')
             ->where('tenant_id', $id)->where('deleted_at', null)->orderBy('id')->get()->getResultArray();
-        $members = $db->table('tenant_members m')->select('u.name, u.email, r.slug AS role, m.status')
-            ->join('users u', 'u.id = m.user_id')->join('roles r', 'r.id = m.role_id')
-            ->where('m.tenant_id', $id)->orderBy('m.id')->get()->getResultArray();
+        $members = (new \App\Services\MemberService())->list($id);
 
         return [
             'tenant'       => array_intersect_key($tenant, array_flip(['id', 'uuid', 'slug', 'created_at', ...self::EDITABLE])),

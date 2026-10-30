@@ -20,7 +20,11 @@ Status: ✅ selesai · 🟡 fondasi tersedia · ⬜ belum
   (status, paket, ruangan, agent, anggota); buat tenant; sewakan / kosongkan kantor (atomik,
   provisioning ruangan sesuai paket, cek batas `max_offices`); harga & status kantor;
   edit semua harga/limit paket; semua aksi tercatat di `audit_logs`
-- ⬜ 2.2 Anggota tenant: undang user, atur peran owner/admin/staff
+- ✅ **2.2 Anggota tenant** — panel *Tim & Akses* di kantor 3D dan di panel Super Admin;
+  undangan via tautan sekali pakai (token acak 256-bit, hanya hash SHA-256 disimpan, berlaku 7 hari,
+  bisa diterbitkan ulang); halaman `/invite/{token}` untuk user baru (buat password) maupun user lama
+  (konfirmasi password); peran Owner/Admin/Staff, nonaktifkan, hapus; tenant selalu punya ≥1 Owner
+  aktif; tidak bisa mengubah keanggotaan sendiri; akses dicabut seketika
 - ⬜ 2.3 Registrasi tenant mandiri + pemilihan lantai (pembayaran menyusul di Phase 4)
 - ⬜ 2.4 Penegakan limit paket saat membuat agent/ruangan (bersama Phase 3)
 
