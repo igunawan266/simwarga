@@ -13,12 +13,15 @@ $routes->group('api/v1', ['namespace' => 'App\Controllers\Api\V1', 'filter' => '
     $routes->get('session', 'SessionController::show');
     $routes->post('session/login', 'SessionController::login', ['filter' => 'throttle:login,5,60']);
     $routes->post('session/logout', 'SessionController::logout');
+    $routes->get('plans', 'RegistrationController::plans');
+    $routes->post('register', 'RegistrationController::register', ['filter' => 'throttle:register,5,600']);
 
     // Tenant-scoped (auth -> tenant context -> controller)
     $routes->group('office', ['filter' => ['auth', 'tenant']], static function (RouteCollection $routes) {
         $routes->get('/', 'OfficeController::show');
         $routes->get('rooms/(:num)', 'OfficeController::room/$1');
 
+        $routes->get('billing', 'OfficeController::billing', ['filter' => 'role:tenant_owner,tenant_admin']);
         $routes->get('members', 'MembersController::index');
         $routes->group('members', ['filter' => 'role:tenant_owner,tenant_admin'], static function (RouteCollection $routes) {
             $routes->post('/', 'MembersController::invite');

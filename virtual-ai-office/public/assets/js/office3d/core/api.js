@@ -24,7 +24,9 @@ async function request(method, path, body) {
     try { json = await res.json(); } catch { /* empty body */ }
     if (json?.csrf) csrfToken = json.csrf;
     if (!res.ok) {
-        const msg = json?.messages?.error || json?.error || Object.values(json?.messages || {})[0] || `HTTP ${res.status}`;
+        // CI4 failures: {messages: {error: "..."}} or validation {messages: {field: "..."}}; `error` is the numeric status.
+        const m = json?.messages;
+        const msg = m?.error || (m && Object.values(m)[0]) || (typeof json?.error === 'string' ? json.error : null) || `HTTP ${res.status}`;
         throw new ApiError(res.status, msg, json);
     }
     return json?.data;
@@ -37,6 +39,9 @@ export const api = {
     logout: () => request('POST', 'session/logout'),
     office: () => request('GET', 'office'),
     room: (id) => request('GET', `office/rooms/${encodeURIComponent(id)}`),
+    plans: () => request('GET', 'plans'),
+    register: (data) => request('POST', 'register', data),
+    billing: () => request('GET', 'office/billing'),
     members: {
         list: () => request('GET', 'office/members'),
         invite: (data) => request('POST', 'office/members', data),

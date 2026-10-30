@@ -18,13 +18,13 @@ class TenantMemberModel extends Model
     /** Active memberships of a user in active tenants, with the tenant role slug. */
     public function activeMembershipsFor(int $userId): array
     {
-        return $this->select('tenant_members.tenant_id, roles.slug AS tenant_role, tenants.company_name, tenants.slug')
+        return $this->select('tenant_members.tenant_id, roles.slug AS tenant_role, tenants.company_name, tenants.slug, tenants.status AS tenant_status')
             ->join('tenants', 'tenants.id = tenant_members.tenant_id')
             ->join('roles', 'roles.id = tenant_members.role_id')
             ->where('tenant_members.user_id', $userId)
             ->where('tenant_members.status', 'active')
             ->where('tenants.deleted_at', null)
-            ->whereIn('tenants.status', ['active'])
+            ->whereIn('tenants.status', ['active', 'pending']) // pending = registered, awaiting first payment
             ->orderBy('tenant_members.id')
             ->findAll();
     }

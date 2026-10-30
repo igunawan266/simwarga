@@ -71,7 +71,9 @@ export class Hud {
         }
         const t = session.tenant;
         const sub = session.user.is_super_admin ? 'Super Admin' : t ? `${t.name} · ${t.role.replace('tenant_', '')}` : 'Tanpa kantor tenant';
-        const admin = session.user.is_super_admin ? '<button class="btn" data-action="admin-plans">Kelola Paket</button>' : '';
+        const admin = session.user.is_super_admin
+            ? '<button class="btn" data-action="admin-plans">Kelola Paket</button>'
+            : ['tenant_owner', 'tenant_admin'].includes(t?.role) ? `<button class="btn" data-action="billing">Tagihan${t.status === 'pending' ? ' <span class="dot-warn"></span>' : ''}</button>` : '';
         el.innerHTML = `${admin}<div class="user-chip"><span class="avatar">${initials(session.user.name)}</span>
             <div>${esc(session.user.name)}<small>${esc(sub)}</small></div></div>
             <button class="btn" data-action="logout">Logout</button>`;
@@ -105,9 +107,10 @@ export class Hud {
         this.floorsData = floors;
         $('#floor-list').innerHTML = [...floors].reverse().map((f) => {
             const t = f.tenant;
-            const label = f.number === 0 ? 'Main Lobby' : t ? t.name : 'Tersedia untuk disewa';
+            const st = f.office?.status;
+            const label = f.number === 0 ? 'Main Lobby' : t ? t.name : st === 'reserved' ? 'Reserved' : st === 'maintenance' ? 'Maintenance' : 'Tersedia untuk disewa';
             const sub = f.number === 0 ? 'Resepsionis & directory' : t ? `${f.office?.number ?? ''} · ${t.industry ?? ''}` : f.office?.number ?? '';
-            const color = f.number === 0 ? '#c0c8d4' : t ? t.color : '#334155';
+            const color = f.number === 0 ? '#c0c8d4' : t ? t.color : st === 'reserved' ? '#fbbf24' : '#334155';
             return `<li><button class="floor-item ${f.number === mine ? 'is-mine' : ''}" data-action="floor" data-floor="${f.number}">
                 <span class="floor-no">${f.number === 0 ? 'L' : String(f.number).padStart(2, '0')}</span>
                 <span class="floor-tenant">${esc(label)}<small>${esc(sub)}</small></span>
@@ -131,23 +134,34 @@ export class Hud {
         $('#info-panel').hidden = true;
     }
 
-    floorPanel(f, { isMine, loggedIn }) {
+    floorPanel(f, { isMine, minePending = false, isSuperAdmin = false }) {
         const t = f.tenant;
         if (f.number === 0) return this.lobbyPanel();
-        const action = isMine
-            ? '<button class="btn btn--primary btn--block" data-action="enter-office">Enter My Office</button>'
-            : !t && !loggedIn ? '<button class="btn btn--block" data-action="open-login">Login untuk menyewa</button>' : '';
+        const st = f.office?.status;
+        const vacant = !t && st === 'available';
+        const status = t ? 'Occupied' : st === 'reserved' ? 'Reserved' : st === 'maintenance' ? 'Maintenance' : 'Available';
+        let action = '';
+        if (isMine && minePending) {
+            action = '<button class="btn btn--primary btn--block" data-action="billing">Lihat tagihan</button>';
+        } else if (isMine) {
+            action = '<button class="btn btn--primary btn--block" data-action="enter-office">Enter My Office</button>';
+        } else if (vacant && !isSuperAdmin) {
+            action = `<button class="btn btn--primary btn--block" data-action="rent" data-floor="${f.number}">Sewa lantai ini</button>`;
+        }
+        const desc = t ? t.industry ?? '' : st === 'reserved'
+            ? 'Lantai ini sedang dipesan dan menunggu pembayaran.'
+            : st === 'maintenance' ? 'Lantai ini sedang dalam perawatan.' : 'Lantai ini tersedia untuk disewa tenant baru.';
         this.showPanel(`
             <div class="eyebrow">Floor ${String(f.number).padStart(2, '0')}</div>
-            <h3>${esc(t ? t.name : 'Available Office')}</h3>
-            <div class="muted">${esc(t ? t.industry ?? '' : 'Lantai ini tersedia untuk disewa tenant baru.')}</div>
+            <h3>${esc(t ? t.name : st === 'reserved' ? 'Reserved Office' : 'Available Office')}</h3>
+            <div class="muted">${esc(desc)}</div>
             <dl class="kv">
                 <dt>Nomor kantor</dt><dd>${esc(f.office?.number ?? '—')}</dd>
-                <dt>Status</dt><dd>${esc(t ? 'Occupied' : 'Available')}</dd>
+                <dt>Status</dt><dd>${esc(status)}</dd>
+                ${vacant && f.office?.monthly_price ? `<dt>Biaya sewa lantai</dt><dd>${rupiah(f.office.monthly_price)}/bln</dd>` : ''}
                 ${t ? `<dt>Aktivitas</dt><dd>${'●'.repeat(t.activity_level)}${'○'.repeat(3 - t.activity_level)}</dd>` : ''}
             </dl>
             ${action}
-            ${!t && !loggedIn ? `<div class="prototype-box"><b>PHASE 4</b>Pemesanan lantai mandiri & pembayaran Tripay akan aktif pada Phase 4.</div>` : ''}
             <div id="admin-floor"></div>
         `);
     }
@@ -442,4 +456,86 @@ export function teamPanelHtml(data, inviteUrl) {
         <h3>Tim &amp; Akses</h3>
         <div class="muted">Anggota login dengan akun masing-masing dan hanya melihat data tenant ini. Owner mengelola semua peran; Admin mengelola Staff.</div>
         ${membersHtml(data.members, { actorRole: data.my_role, myUserId: data.my_user_id, scope: 'office', inviteUrl })}`;
+}
+
+// ---------------------------------------------------------------------- registration & billing
+export function registerPanelHtml(floor, plans, session) {
+    const guest = !session?.authenticated;
+    const officePrice = floor.office?.monthly_price || 0;
+    const choosable = plans.filter((p) => !p.is_custom);
+    const firstCode = (choosable.find((p) => p.code === 'BUSINESS') || choosable[0])?.code;
+    return `
+        <div class="eyebrow">Sewa kantor · Floor ${String(floor.number).padStart(2, '0')} · Suite ${esc(floor.office?.number ?? '')}</div>
+        <h3>Daftarkan perusahaan Anda</h3>
+        <div class="muted">Kantor akan di-reserve untuk Anda dan invoice dibuat. Langganan aktif setelah pembayaran terverifikasi.</div>
+        <form class="admin-form" data-form="register" data-floor="${floor.number}" novalidate>
+            <div class="section-label">1 · Pilih paket</div>
+            <div class="plan-options">
+                ${plans.map((p) => `
+                    <label class="plan-option ${p.is_custom ? 'is-disabled' : ''}">
+                        <input type="radio" name="plan_code" value="${esc(p.code)}" data-price="${p.price}" ${p.code === firstCode ? 'checked' : ''} ${p.is_custom ? 'disabled' : ''}>
+                        <span class="plan-option__body">
+                            <b>${esc(p.name)}</b>
+                            <span class="plan-option__price">${p.is_custom ? 'Harga kontrak' : `${rupiah(p.price)}<small>/${p.duration_days} hari</small>`}</span>
+                            <small>${esc(p.description ?? '')}</small>
+                            <small>${p.max_agents} Agent AI · ${p.max_operational_rooms} ruang operasional</small>
+                        </span>
+                    </label>`).join('')}
+            </div>
+            <div class="section-label">2 · Perusahaan</div>
+            <label>Nama perusahaan<input name="company_name" required minlength="2" maxlength="150"></label>
+            <div class="grid-2">
+                <label>Industri<input name="industry" maxlength="100"></label>
+                <label>Warna brand<input name="brand_color" type="color" value="#22d3ee"></label>
+            </div>
+            ${guest ? `
+            <div class="section-label">3 · Akun Owner</div>
+            <label>Nama Anda<input name="owner_name" required minlength="2" maxlength="150" autocomplete="name"></label>
+            <label>Email<input name="email" type="email" required maxlength="191" autocomplete="email"></label>
+            <div class="grid-2">
+                <label>Password<input name="password" type="password" required minlength="10" autocomplete="new-password"></label>
+                <label>Ulangi password<input name="password_confirm" type="password" required autocomplete="new-password"></label>
+            </div>
+            <p class="muted small">Sudah punya akun? <a href="#" data-action="open-login">Login dulu</a> agar perusahaan baru terhubung ke akun Anda.</p>`
+            : `<p class="muted small">Perusahaan akan didaftarkan atas akun <b>${esc(session.user.email)}</b> sebagai Owner.</p>`}
+            <div class="register-total" data-office-price="${officePrice}">
+                <span>Total invoice pertama</span><b id="register-total">—</b>
+            </div>
+            <div class="form-error" id="register-error" hidden></div>
+            <button class="btn btn--primary btn--block" type="submit">Reserve kantor &amp; buat invoice</button>
+        </form>`;
+}
+
+export function billingPanelHtml(b) {
+    const s = b.subscription;
+    const pending = s?.status === 'pending';
+    const reservedUntil = b.office?.status === 'reserved' && b.office.reserved_until;
+    const statusLabel = { pending: 'Menunggu pembayaran', trial: 'Trial', active: 'Aktif', expired: 'Kedaluwarsa', cancelled: 'Dibatalkan', past_due: 'Lewat jatuh tempo' };
+    return `
+        <div class="eyebrow">Tagihan &amp; Langganan</div>
+        <h3>${esc(s ? `Paket ${s.plan_name}` : 'Belum ada langganan')}</h3>
+        <dl class="kv">
+            <dt>Status langganan</dt><dd>${esc(s ? statusLabel[s.status] ?? s.status : '—')}</dd>
+            <dt>Kantor</dt><dd>${b.office ? `Suite ${esc(b.office.number)} · Lantai ${b.office.floor_number}` : 'Belum ada'}</dd>
+            ${reservedUntil ? `<dt>Reserved sampai</dt><dd>${esc(reservedUntil)}</dd>` : ''}
+            ${s?.ends_at ? `<dt>Berakhir</dt><dd>${esc(s.ends_at)}</dd>` : ''}
+        </dl>
+        ${reservedUntil ? '<div class="prototype-box"><b>RESERVASI SEMENTARA</b>Bayar invoice sebelum batas waktu. Jika lewat, kantor otomatis dilepas dan invoice kedaluwarsa.</div>' : ''}
+        <div class="section-label">Invoice</div>
+        ${b.invoices.map((i) => `
+            <div class="invoice-card">
+                <div class="invoice-card__head"><b>${esc(i.invoice_number)}</b>${invoicePill(i.status)}</div>
+                <small>${esc(i.description)}</small>
+                ${i.line_items.map((l) => `<div class="invoice-line"><span>${esc(l.description)}</span><span>${rupiah(l.amount)}</span></div>`).join('')}
+                <div class="invoice-line invoice-line--total"><span>Total</span><span>${rupiah(i.total)}</span></div>
+                ${i.status === 'unpaid' ? `<small>Jatuh tempo ${esc(i.due_at)}</small>
+                    <button class="btn btn--primary btn--block" disabled title="Phase 4">Bayar via Tripay</button>
+                    <small class="muted">PHASE 4: pembayaran Virtual Account / QRIS / E-Wallet melalui Tripay. Tidak ada pembayaran yang disimulasikan.</small>` : ''}
+            </div>`).join('') || '<div class="empty">Belum ada invoice.</div>'}
+        ${!pending && b.tenant_status === 'active' ? '<button class="btn btn--block" data-action="enter-office">Masuk kantor</button>' : ''}`;
+}
+
+function invoicePill(status) {
+    const c = { unpaid: '#fbbf24', paid: '#34d399', expired: '#64748b', failed: '#f87171', refunded: '#a78bfa', cancelled: '#64748b' }[status] || '#94a3b8';
+    return `<span class="status-pill" style="--c:${c}">${esc(status)}</span>`;
 }

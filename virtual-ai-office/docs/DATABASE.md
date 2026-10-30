@@ -60,7 +60,7 @@ erDiagram
 | `buildings` | `code` unik, `theme` JSON untuk warna scene 3D |
 | `floors` | unik `(building_id, floor_number)`, `floor_type` lobby/office, `base_monthly_price` |
 | `room_types` | katalog 10 ruangan (4 umum + 6 operasional), `layout` JSON posisi default di floor plate |
-| `offices` | unit sewa; `office_number` unik; `tenant_id` NULL = kosong |
+| `offices` | unit sewa; `office_number` unik; `tenant_id` NULL = kosong; `status` available/reserved/occupied/maintenance; `reserved_until` (migrasi `000008`) = batas bayar reservasi |
 | `rooms` | milik tenant; `position` JSON `{x,z,w,d}`; `is_enabled` dibatasi paket |
 
 ### Langganan (`000003`)

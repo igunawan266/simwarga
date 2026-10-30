@@ -18,10 +18,19 @@ class OfficeController extends BaseApiController
             return $this->failNotFound('Tenant belum memiliki kantor di gedung ini.');
         }
         if ($data['subscription'] === null) {
-            return $this->fail(['error' => 'Langganan tidak aktif. Silakan perpanjang paket untuk masuk ke kantor.', 'data' => $data], 402);
+            $message = \Config\Services::tenantContext()->tenant()['status'] === 'pending'
+                ? 'Kantor Anda sudah di-reserve. Selesaikan pembayaran invoice untuk mulai memakai kantor.'
+                : 'Langganan tidak aktif. Silakan perpanjang paket untuk masuk ke kantor.';
+
+            return $this->fail(['error' => $message, 'data' => $data], 402);
         }
 
         return $this->ok($data);
+    }
+
+    public function billing()
+    {
+        return $this->ok((new \App\Services\BillingService())->summary());
     }
 
     public function room(int $id)

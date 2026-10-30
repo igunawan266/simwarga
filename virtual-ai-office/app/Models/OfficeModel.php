@@ -13,7 +13,7 @@ class OfficeModel extends Model
     protected $table         = 'offices';
     protected $returnType    = 'array';
     protected $useTimestamps = true;
-    protected $allowedFields = ['floor_id', 'tenant_id', 'office_number', 'name', 'area_sqm', 'monthly_price', 'status', 'customization'];
+    protected $allowedFields = ['floor_id', 'tenant_id', 'office_number', 'name', 'area_sqm', 'monthly_price', 'status', 'customization', 'reserved_until'];
 
     public function findForTenant(int $tenantId): ?array
     {

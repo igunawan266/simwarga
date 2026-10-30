@@ -22,7 +22,7 @@ class BuildingService
 
         $db   = Database::connect();
         $rows = $db->table('floors f')
-            ->select('f.id, f.floor_number, f.name, f.floor_type, f.status, o.office_number, o.status AS office_status,
+            ->select('f.id, f.floor_number, f.name, f.floor_type, f.status, o.office_number, o.status AS office_status, o.monthly_price,
                       t.id AS tenant_id, t.company_name, t.brand_color, t.industry, t.logo_url, t.is_listed')
             ->join('offices o', 'o.floor_id = f.id', 'left')
             ->join('tenants t', "t.id = o.tenant_id AND t.status = 'active' AND t.deleted_at IS NULL", 'left')
@@ -50,7 +50,7 @@ class BuildingService
                 'tenant' => null,
             ];
             if ($r['office_number'] !== null) {
-                $floors[$n]['office'] = ['number' => $r['office_number'], 'status' => $r['office_status']];
+                $floors[$n]['office'] = ['number' => $r['office_number'], 'status' => $r['office_status'], 'monthly_price' => (int) $r['monthly_price']];
             }
             if ($r['tenant_id'] !== null) {
                 $listed = (bool) $r['is_listed'];

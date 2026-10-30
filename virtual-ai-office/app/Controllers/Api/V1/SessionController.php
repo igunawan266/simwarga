@@ -61,7 +61,7 @@ class SessionController extends BaseApiController
         return [
             'authenticated' => true,
             'user'          => ['name' => $user['name'], 'email' => $user['email'], 'is_super_admin' => ($user['platform_role'] ?? null) === 'super_admin'],
-            'tenant'        => $active === null ? null : ['name' => $active['company_name'], 'role' => $active['tenant_role'], 'office' => $office],
+            'tenant'        => $active === null ? null : ['name' => $active['company_name'], 'role' => $active['tenant_role'], 'status' => $active['tenant_status'], 'office' => $office],
         ];
     }
 }

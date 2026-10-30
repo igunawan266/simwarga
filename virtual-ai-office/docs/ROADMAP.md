@@ -25,7 +25,13 @@ Status: ✅ selesai · 🟡 fondasi tersedia · ⬜ belum
   bisa diterbitkan ulang); halaman `/invite/{token}` untuk user baru (buat password) maupun user lama
   (konfirmasi password); peran Owner/Admin/Staff, nonaktifkan, hapus; tenant selalu punya ≥1 Owner
   aktif; tidak bisa mengubah keanggotaan sendiri; akses dicabut seketika
-- ⬜ 2.3 Registrasi tenant mandiri + pemilihan lantai (pembayaran menyusul di Phase 4)
+- ✅ **2.3 Registrasi tenant mandiri** — klik lantai kosong → *Sewa lantai ini* → pilih paket
+  (paket kontrak/Enterprise tidak bisa dipesan mandiri), data perusahaan & akun Owner (atau akun yang
+  sedang login). Satu transaksi: tenant `pending`, Owner, kantor **reserved** (klaim atomik),
+  langganan `pending` dengan snapshot harga/limit, **invoice `unpaid`** (`INV-YYYYMMDD-XXXXXX`),
+  ruangan sesuai paket. Panel **Tagihan** (owner/admin). Reservasi kedaluwarsa dilepas oleh
+  `php spark office:expire-reservations` (cron 5 menit): kantor tersedia lagi, langganan `cancelled`,
+  invoice `expired`. Tidak ada pembayaran yang disimulasikan.
 - ⬜ 2.4 Penegakan limit paket saat membuat agent/ruangan (bersama Phase 3)
 
 ## PHASE 3 – AI Engine ⬜

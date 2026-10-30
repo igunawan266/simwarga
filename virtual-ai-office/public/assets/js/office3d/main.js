@@ -5,7 +5,7 @@ import { api, ApiError } from './core/api.js';
 import { DIM, floorY, floorHeight } from './core/config.js';
 import { Building } from './building/Building.js';
 import { Elevator } from './building/Elevator.js';
-import { Hud, esc, adminFloorHtml, plansPanelHtml, teamPanelHtml } from './ui/Hud.js';
+import { Hud, esc, adminFloorHtml, plansPanelHtml, teamPanelHtml, registerPanelHtml, billingPanelHtml } from './ui/Hud.js';
 
 /**
  * Application controller / state machine.
@@ -52,6 +52,10 @@ class App {
                 const tenant = await api.admin.createTenant(v);
                 return api.admin.assignOffice(f.dataset.office, tenant.id);
             }, 'Tenant dibuat dan kantor disewakan.', true),
+            // Registration & billing
+            rent: (d) => this.openRegister(Number(d.floor)),
+            'form:register': (v, f) => this.submitRegister(v, f),
+            billing: () => this.openBilling(),
             // Team & access
             team: () => this.openTeam(),
             copy: (d) => navigator.clipboard?.writeText(d.text).then(() => this.hud.toast('Tautan disalin.'), () => this.hud.toast('Salin manual tautan di atas.', 'error')),
@@ -199,16 +203,77 @@ class App {
         }
         this.hud.toast(message);
         if (rebuild) {
-            this.directory = await api.building();
-            this.building.dispose();
-            this.building = new Building(this.stage, this.directory);
-            this.building.setMine(this.myFloor());
-            this.building.setActive(this.selectedFloor);
-            this.hud.renderFloors(this.directory.floors, { mine: this.myFloor() });
+            await this.refreshBuilding();
             if (this.selectedFloor !== null && this.mode === 'explore') {
-                this.hud.floorPanel(this.building.floorData(this.selectedFloor), { isMine: false, loggedIn: true });
+                this.hud.floorPanel(this.building.floorData(this.selectedFloor), { isMine: false, isSuperAdmin: true });
                 this.loadAdminFloor(this.selectedFloor);
             }
+        }
+    }
+
+    /** Re-read the public directory and rebuild the tower (after leasing changes). */
+    async refreshBuilding() {
+        this.directory = await api.building();
+        this.building.dispose();
+        this.building = new Building(this.stage, this.directory);
+        this.building.setMine(this.myFloor());
+        this.building.setActive(this.selectedFloor);
+        this.hud.renderFloors(this.directory.floors, { mine: this.myFloor() });
+    }
+
+    // ---------------------------------------------------------------- registration & billing
+    async openRegister(floorNumber) {
+        const floor = this.building.floorData(floorNumber);
+        if (!floor || floor.tenant || floor.office?.status !== 'available') {
+            this.hud.toast('Lantai ini sudah tidak tersedia.', 'error');
+            return;
+        }
+        try {
+            const { plans } = await api.plans();
+            this.hud.showPanel(registerPanelHtml(floor, plans, this.session));
+            document.getElementById('info-panel').classList.add('info-panel--wide');
+        } catch (e) {
+            this.hud.toast(e.message, 'error');
+            return;
+        }
+        const form = document.querySelector('form[data-form="register"]');
+        const total = () => {
+            const plan = form.querySelector('input[name=plan_code]:checked');
+            const office = Number(form.querySelector('.register-total').dataset.officePrice || 0);
+            document.getElementById('register-total').textContent = plan
+                ? `Rp ${(Number(plan.dataset.price) + office).toLocaleString('id-ID')}` : '—';
+        };
+        form.addEventListener('change', total);
+        total();
+    }
+
+    async submitRegister(values, form) {
+        const err = form.querySelector('#register-error');
+        const btn = form.querySelector('button[type=submit]');
+        err.hidden = true;
+        btn.disabled = true;
+        try {
+            await api.register({ ...values, floor_number: form.dataset.floor });
+        } catch (e) {
+            err.textContent = e.message;
+            err.hidden = false;
+            btn.disabled = false;
+            if (e.status === 409) this.refreshBuilding();
+            return;
+        }
+        this.session = await api.session();
+        this.hud.renderSession(this.session);
+        await this.refreshBuilding();
+        this.hud.toast('Kantor berhasil di-reserve. Invoice telah dibuat.');
+        this.openBilling();
+    }
+
+    async openBilling() {
+        try {
+            const billing = await api.billing();
+            this.hud.showPanel(billingPanelHtml(billing));
+        } catch (e) {
+            this.hud.toast(e.message, 'error');
         }
     }
 
@@ -236,7 +301,11 @@ class App {
         this.building.setActive(n);
         this.hud.highlightFloor(n);
         const f = this.building.floorData(n);
-        this.hud.floorPanel(f, { isMine: n === this.myFloor(), loggedIn: !!this.session?.authenticated });
+        this.hud.floorPanel(f, {
+            isMine: n === this.myFloor(),
+            minePending: this.session?.tenant?.status === 'pending',
+            isSuperAdmin: this.isSuperAdmin(),
+        });
         if (this.isSuperAdmin()) this.loadAdminFloor(n);
         this.hud.breadcrumb([this.directory.building.name, `Floor ${String(n).padStart(2, '0')}`]);
         const y = floorY(n) + floorHeight(n) / 2;
@@ -269,6 +338,12 @@ class App {
         try {
             this.office = await api.office();
         } catch (e) {
+            if (e.status === 402) {
+                // Registered but not paid yet: show the invoice instead of the office.
+                this.hud.toast(e.message, 'error', 5000);
+                if (['tenant_owner', 'tenant_admin'].includes(this.session.tenant.role)) this.openBilling();
+                return;
+            }
             this.hud.toast(e.message, 'error', 5000);
             return;
         }

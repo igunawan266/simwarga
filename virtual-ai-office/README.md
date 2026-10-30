@@ -34,6 +34,12 @@ php spark serve
 
 Buka http://localhost:8080.
 
+Di server production, jadwalkan pelepasan reservasi yang tidak dibayar (setiap 5 menit):
+
+```bash
+php spark office:expire-reservations
+```
+
 ### Akun demo (dibuat oleh `DemoSeeder`, tidak pernah di production)
 
 | Email | Password | Peran |
@@ -58,6 +64,8 @@ Data demo memakai langganan **trial**; tidak ada invoice atau pembayaran palsu y
    (sewakan/kosongkan kantor, buat tenant, status tenant, harga kantor, undang Owner) dan tombol **Kelola Paket**.
 8. Di kantor, tombol **Tim & Akses** → undang anggota, salin tautan, buka di browser lain untuk
    bergabung — anggota baru langsung dibawa elevator ke kantornya.
+9. Tanpa login, klik lantai kosong → **Sewa lantai ini** → pilih paket & isi data → kantor di-reserve,
+   invoice dibuat, panel **Tagihan** terbuka (pembayaran Tripay di Phase 4).
 
 Tombol fitur fase berikutnya ditampilkan non-aktif dengan label **PHASE n / PROTOTYPE**.
 
@@ -87,6 +95,9 @@ update `tenant_id`, delete lintas tenant).
 | POST | `/api/v1/session/logout` | CSRF |
 | GET | `/api/v1/office` | auth + tenant — kantor, ruangan, agent, langganan |
 | GET | `/api/v1/office/rooms/{id}` | auth + tenant — detail ruangan (404 untuk milik tenant lain) |
+| GET | `/api/v1/plans` | publik — paket aktif |
+| POST | `/api/v1/register` | publik/login, CSRF, 5 per 10 menit — daftar tenant + reserve lantai + invoice |
+| GET | `/api/v1/office/billing` | owner/admin — langganan, reservasi, invoice |
 | GET | `/api/v1/office/members` | auth + tenant — daftar anggota |
 | POST | `/api/v1/office/members` | owner/admin — undang (`email`, `role`) → `invite_url` |
 | PATCH / DELETE | `/api/v1/office/members/{id}` | owner/admin — ubah peran/status, hapus |
